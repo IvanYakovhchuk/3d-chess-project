@@ -70,6 +70,22 @@
         }
         computeVertexNormals() {}
       },
+      PlaneGeometry: class {
+        constructor(w, h) {
+          this.w = w;
+          this.h = h;
+        }
+        computeVertexNormals() {}
+      },
+      TorusGeometry: class {
+        constructor(radius, tube, radialSegments, tubularSegments) {
+          this.radius = radius;
+          this.tube = tube;
+          this.radialSegments = radialSegments;
+          this.tubularSegments = tubularSegments;
+        }
+        computeVertexNormals() {}
+      },
       CircleGeometry: class {
         constructor(radius, segments) {
           this.radius = radius;
@@ -256,19 +272,13 @@
             assert(piece2d.userData.is2D === true, '2D piece userData.is2D is true');
             assert(piece2d.userData.height === 0.04, '2D piece height is 0.04');
 
-            let hasPuck = false, hasRing = false, hasFace = false, hasFelt = false;
+            let hasFace = false;
             piece2d.traverse((node) => {
               if (node.isMesh) {
-                if (node.userData.isPuck) hasPuck = true;
-                if (node.userData.isRing) hasRing = true;
                 if (node.userData.isFace) hasFace = true;
-                if (node.userData.isFelt) hasFelt = true;
               }
             });
-            assert(hasPuck, '2D piece has token puck');
-            assert(hasRing, '2D piece has outer ring');
-            assert(hasFace, '2D piece has vector face mesh');
-            assert(hasFelt, '2D piece has base felt pad');
+            assert(hasFace, '2D piece has transparent vector face mesh');
 
             // Test updatePieceTheme on 2D piece
             window.ChessPieces3D.updatePieceTheme(piece2d, 'wood');

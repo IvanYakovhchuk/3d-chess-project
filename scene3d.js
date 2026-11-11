@@ -340,7 +340,7 @@
     return group;
   }
 
-  // Fallback Procedural 2D Chess Piece Mesh Generator
+  // Fallback Procedural 2D Chess Piece Mesh Generator (Lichess cburnett / Chess.com Neo style)
   function createFallbackPiece2DMesh(type, color, theme) {
     const group = new THREE.Group();
     group.name = `piece_2d_${color}_${type}`;
@@ -352,204 +352,301 @@
     const ctx = canvas.getContext('2d');
 
     const isWhite = color === 'w';
-    let badgeBg, badgeBorder, symbolFill, symbolStroke, detailStroke;
+    let pieceFill, pieceStroke, detailStroke, haloStroke;
 
     if (theme === 'neon') {
-      badgeBg = isWhite ? '#003344' : '#440033';
-      badgeBorder = isWhite ? '#00f0ff' : '#ff007f';
-      symbolFill = isWhite ? '#00f0ff' : '#ff007f';
-      symbolStroke = '#ffffff';
-      detailStroke = '#000000';
+      pieceFill = isWhite ? '#00ffff' : '#ff007f';
+      pieceStroke = '#ffffff';
+      detailStroke = isWhite ? '#003344' : '#ffffff';
+      haloStroke = isWhite ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 0, 127, 0.4)';
     } else if (theme === 'wood') {
-      badgeBg = isWhite ? '#deb887' : '#3b2315';
-      badgeBorder = isWhite ? '#6d4c2d' : '#dec59b';
-      symbolFill = isWhite ? '#fff8ee' : '#1d120a';
-      symbolStroke = isWhite ? '#3d2516' : '#dec59b';
-      detailStroke = isWhite ? '#3d2516' : '#dec59b';
+      pieceFill = isWhite ? '#fdf6e7' : '#2c1609';
+      pieceStroke = isWhite ? '#3d2516' : '#0a0c0e';
+      detailStroke = isWhite ? '#3d2516' : '#ecd8b8';
+      haloStroke = isWhite ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.75)';
     } else {
-      // Classic & Marble: High contrast tokens
-      badgeBg = isWhite ? '#ffffff' : '#181b22';
-      badgeBorder = isWhite ? '#0f172a' : '#e2e8f0';
-      symbolFill = isWhite ? '#ffffff' : '#1e293b';
-      symbolStroke = isWhite ? '#0f172a' : '#f8fafc';
-      detailStroke = isWhite ? '#0f172a' : '#f8fafc';
+      // Classic & Marble: High contrast Lichess cburnett style
+      pieceFill = isWhite ? '#ffffff' : '#1e2229';
+      pieceStroke = isWhite ? '#141619' : '#0a0c0e';
+      detailStroke = isWhite ? '#141619' : '#f1f5f9';
+      haloStroke = isWhite ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.75)';
     }
 
-    // Draw circular token badge
+    // 100% transparent background (NO circle or puck)
     ctx.clearRect(0, 0, size, size);
 
-    // Subtle drop shadow under token
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 8;
+    // Helper to draw base for pieces
+    function drawBase(y1, y2, w1, w2) {
+      ctx.beginPath();
+      ctx.moveTo(256 - w1 / 2, y1);
+      ctx.lineTo(256 + w1 / 2, y1);
+      ctx.lineTo(256 + w2 / 2, y2);
+      ctx.lineTo(256 - w2 / 2, y2);
+      ctx.closePath();
+    }
 
-    ctx.beginPath();
-    ctx.arc(256, 256, 220, 0, Math.PI * 2);
-    ctx.fillStyle = badgeBg;
-    ctx.fill();
-
-    ctx.shadowColor = 'transparent';
-    ctx.lineWidth = 14;
-    ctx.strokeStyle = badgeBorder;
-    ctx.stroke();
-
-    // Inner contrasting accent ring
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = isWhite ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.2)';
-    ctx.beginPath();
-    ctx.arc(256, 256, 206, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Draw vector piece silhouette inside token
-    ctx.fillStyle = symbolFill;
-    ctx.strokeStyle = symbolStroke;
-    ctx.lineWidth = 12;
+    ctx.save();
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    ctx.save();
-    ctx.translate(256, 256);
+    function renderPiecePaths() {
+      if (type === 'p') {
+        // Pawn: Double-banded base, curved neck, collar, large round head
+        ctx.beginPath();
+        // Base
+        ctx.moveTo(140, 445);
+        ctx.lineTo(372, 445);
+        ctx.lineTo(365, 415);
+        ctx.lineTo(147, 415);
+        ctx.closePath();
+        // Pedestal step
+        ctx.moveTo(158, 415);
+        ctx.lineTo(354, 415);
+        ctx.lineTo(340, 390);
+        ctx.lineTo(172, 390);
+        ctx.closePath();
+        // Neck & waist
+        ctx.moveTo(172, 390);
+        ctx.quadraticCurveTo(225, 310, 222, 245);
+        ctx.lineTo(290, 245);
+        ctx.quadraticCurveTo(287, 310, 340, 390);
+        ctx.closePath();
+        // Collar bead
+        ctx.moveTo(212, 245);
+        ctx.lineTo(300, 245);
+        ctx.lineTo(296, 225);
+        ctx.lineTo(216, 225);
+        ctx.closePath();
+        // Head
+        ctx.arc(256, 155, 62, 0, Math.PI * 2);
+        ctx.closePath();
+      } else if (type === 'r') {
+        // Rook: Two-tier base, straight tower body, flared cornice, 3 merlons / 2 crenels
+        ctx.beginPath();
+        // Base
+        ctx.moveTo(132, 445);
+        ctx.lineTo(380, 445);
+        ctx.lineTo(370, 412);
+        ctx.lineTo(142, 412);
+        ctx.closePath();
+        // Tier 2
+        ctx.moveTo(152, 412);
+        ctx.lineTo(360, 412);
+        ctx.lineTo(350, 385);
+        ctx.lineTo(162, 385);
+        ctx.closePath();
+        // Tower body
+        ctx.moveTo(164, 385);
+        ctx.lineTo(172, 215);
+        ctx.lineTo(340, 215);
+        ctx.lineTo(348, 385);
+        ctx.closePath();
+        // Cornice & 3 merlons
+        ctx.moveTo(145, 215);
+        ctx.lineTo(367, 215);
+        ctx.lineTo(367, 105);
+        ctx.lineTo(322, 105);
+        ctx.lineTo(322, 145);
+        ctx.lineTo(280, 145);
+        ctx.lineTo(280, 105);
+        ctx.lineTo(232, 105);
+        ctx.lineTo(232, 145);
+        ctx.lineTo(190, 145);
+        ctx.lineTo(190, 105);
+        ctx.lineTo(145, 105);
+        ctx.closePath();
+      } else if (type === 'n') {
+        // Knight: Lichess side profile facing LEFT (-X)
+        ctx.beginPath();
+        ctx.moveTo(140, 445);
+        ctx.lineTo(372, 445);
+        ctx.lineTo(362, 412);
+        ctx.lineTo(150, 412);
+        ctx.lineTo(162, 390);
+        ctx.lineTo(346, 390);
+        // Chest curve rising left
+        ctx.quadraticCurveTo(240, 360, 205, 305);
+        ctx.quadraticCurveTo(180, 260, 120, 245); // snout tip
+        ctx.quadraticCurveTo(115, 230, 130, 220); // upper muzzle
+        ctx.lineTo(210, 210); // cheek
+        ctx.lineTo(225, 125); // ear back
+        ctx.lineTo(252, 75);  // left ear tip
+        ctx.lineTo(270, 115); // between ears
+        ctx.lineTo(290, 78);  // right ear tip
+        ctx.lineTo(305, 120); // ear base
+        // Sweeping arched mane back
+        ctx.quadraticCurveTo(385, 200, 355, 390);
+        ctx.closePath();
+      } else if (type === 'b') {
+        // Bishop: Tiered base, collar band, mitre dome, top finial orb
+        ctx.beginPath();
+        ctx.moveTo(136, 445);
+        ctx.lineTo(376, 445);
+        ctx.lineTo(366, 412);
+        ctx.lineTo(146, 412);
+        ctx.closePath();
+        ctx.moveTo(156, 412);
+        ctx.lineTo(356, 412);
+        ctx.lineTo(342, 385);
+        ctx.lineTo(170, 385);
+        ctx.closePath();
+        // Lower waist
+        ctx.moveTo(172, 385);
+        ctx.quadraticCurveTo(215, 360, 218, 335);
+        ctx.lineTo(294, 335);
+        ctx.quadraticCurveTo(297, 360, 340, 385);
+        ctx.closePath();
+        // Mitre dome
+        ctx.moveTo(205, 335);
+        ctx.lineTo(307, 335);
+        ctx.bezierCurveTo(380, 290, 350, 150, 256, 125);
+        ctx.bezierCurveTo(162, 150, 132, 290, 205, 335);
+        ctx.closePath();
+        // Apex orb
+        ctx.arc(256, 100, 22, 0, Math.PI * 2);
+        ctx.closePath();
+      } else if (type === 'q') {
+        // Queen: Tiered base, wide 5-pointed coronet with deep scallops & 5 pearls
+        ctx.beginPath();
+        ctx.moveTo(132, 445);
+        ctx.lineTo(380, 445);
+        ctx.lineTo(370, 412);
+        ctx.lineTo(142, 412);
+        ctx.closePath();
+        ctx.moveTo(152, 412);
+        ctx.lineTo(360, 412);
+        ctx.lineTo(346, 385);
+        ctx.lineTo(166, 385);
+        ctx.closePath();
+        // Coronet body
+        ctx.moveTo(170, 385);
+        ctx.lineTo(125, 185); // point 1
+        ctx.quadraticCurveTo(165, 240, 185, 155); // point 2
+        ctx.quadraticCurveTo(225, 230, 256, 135); // point 3 (center peak)
+        ctx.quadraticCurveTo(287, 230, 327, 155); // point 4
+        ctx.quadraticCurveTo(347, 240, 387, 185); // point 5
+        ctx.lineTo(342, 385);
+        ctx.closePath();
+        // 5 pearls on peaks
+        const queenPearls = [
+          [125, 172], [185, 142], [256, 122], [327, 142], [387, 172]
+        ];
+        queenPearls.forEach(([px, py]) => {
+          ctx.moveTo(px + 16, py);
+          ctx.arc(px, py, 16, 0, Math.PI * 2);
+        });
+      } else if (type === 'k') {
+        // King: Tiered base, collar band, royal dome lobes, upright cross (+)
+        ctx.beginPath();
+        ctx.moveTo(132, 445);
+        ctx.lineTo(380, 445);
+        ctx.lineTo(370, 412);
+        ctx.lineTo(142, 412);
+        ctx.closePath();
+        ctx.moveTo(152, 412);
+        ctx.lineTo(360, 412);
+        ctx.lineTo(346, 385);
+        ctx.lineTo(166, 385);
+        ctx.closePath();
+        // Waist
+        ctx.moveTo(170, 385);
+        ctx.quadraticCurveTo(215, 365, 218, 340);
+        ctx.lineTo(294, 340);
+        ctx.quadraticCurveTo(297, 365, 342, 385);
+        ctx.closePath();
+        // Symmetrical crown lobes
+        ctx.moveTo(205, 340);
+        ctx.lineTo(307, 340);
+        ctx.bezierCurveTo(395, 280, 355, 175, 256, 195);
+        ctx.bezierCurveTo(157, 175, 117, 280, 205, 340);
+        ctx.closePath();
+        // Upright cross finial (+)
+        ctx.rect(242, 65, 28, 95);
+        ctx.rect(212, 90, 88, 26);
+      }
+    }
+
+    // Step 1: Draw outer halo stroke for Black pieces (makes piece pop on black squares)
+    if (!isWhite) {
+      renderPiecePaths();
+      ctx.lineWidth = 22;
+      ctx.strokeStyle = haloStroke;
+      ctx.stroke();
+    }
+
+    // Step 2: Fill silhouette with soft drop shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+    renderPiecePaths();
+    ctx.fillStyle = pieceFill;
+    ctx.fill();
+
+    // Step 3: Draw crisp main outer contour stroke
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = 15;
+    ctx.strokeStyle = pieceStroke;
+    ctx.stroke();
+
+    // Step 4: Draw interior detail engraving lines (Lichess cburnett style)
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = detailStroke;
+    ctx.beginPath();
 
     if (type === 'p') {
-      // Pawn
-      ctx.beginPath();
-      ctx.arc(0, -65, 48, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(-25, -15);
-      ctx.quadraticCurveTo(-15, 30, -55, 80);
-      ctx.lineTo(55, 80);
-      ctx.quadraticCurveTo(15, 30, 25, -15);
-      ctx.closePath();
-      ctx.fill();
+      // Pawn head highlight arc & collar line
+      ctx.arc(245, 145, 38, -Math.PI * 0.85, -Math.PI * 0.15);
+      ctx.moveTo(224, 235);
+      ctx.lineTo(288, 235);
       ctx.stroke();
     } else if (type === 'r') {
-      // Rook
-      ctx.beginPath();
-      ctx.moveTo(-65, -75);
-      ctx.lineTo(-65, -35);
-      ctx.lineTo(-45, -35);
-      ctx.lineTo(-45, -55);
-      ctx.lineTo(-20, -55);
-      ctx.lineTo(-20, -35);
-      ctx.lineTo(20, -35);
-      ctx.lineTo(20, -55);
-      ctx.lineTo(45, -55);
-      ctx.lineTo(45, -35);
-      ctx.lineTo(65, -35);
-      ctx.lineTo(65, -75);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(-50, -35);
-      ctx.lineTo(-40, 50);
-      ctx.lineTo(-70, 80);
-      ctx.lineTo(70, 80);
-      ctx.lineTo(40, 50);
-      ctx.lineTo(50, -35);
-      ctx.closePath();
-      ctx.fill();
+      // Rook arrow-slit & horizontal bands
+      ctx.moveTo(175, 235);
+      ctx.lineTo(337, 235);
+      ctx.moveTo(172, 370);
+      ctx.lineTo(340, 370);
+      ctx.moveTo(256, 265);
+      ctx.lineTo(256, 340);
       ctx.stroke();
     } else if (type === 'n') {
-      // Knight
-      ctx.beginPath();
-      ctx.moveTo(-60, 80);
-      ctx.lineTo(65, 80);
-      ctx.lineTo(45, 50);
-      ctx.quadraticCurveTo(55, 0, 35, -50);
-      ctx.lineTo(15, -75);
-      ctx.lineTo(-5, -60);
-      ctx.lineTo(-35, -45);
-      ctx.quadraticCurveTo(-75, -20, -70, 10);
-      ctx.lineTo(-40, 15);
-      ctx.quadraticCurveTo(-50, 45, -60, 80);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Eye
+      // Knight almond eye, nostril, and mane locks
       ctx.fillStyle = detailStroke;
       ctx.beginPath();
-      ctx.arc(-20, -20, 8, 0, Math.PI * 2);
+      ctx.ellipse(172, 228, 9, 6, -0.3, 0, Math.PI * 2);
       ctx.fill();
+      ctx.beginPath();
+      // Nostril notch
+      ctx.arc(134, 238, 4, 0, Math.PI * 2);
+      ctx.fill();
+      // Curved jaw & mane lines
+      ctx.beginPath();
+      ctx.moveTo(145, 252);
+      ctx.quadraticCurveTo(195, 265, 222, 285);
+      ctx.moveTo(250, 155);
+      ctx.quadraticCurveTo(285, 230, 280, 320);
+      ctx.stroke();
     } else if (type === 'b') {
-      // Bishop
-      ctx.beginPath();
-      ctx.arc(0, -78, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(0, -60);
-      ctx.bezierCurveTo(50, -40, 50, 20, 20, 45);
-      ctx.lineTo(55, 80);
-      ctx.lineTo(-55, 80);
-      ctx.lineTo(-20, 45);
-      ctx.bezierCurveTo(-50, 20, -50, -40, 0, -60);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Mitre slash
-      ctx.beginPath();
-      ctx.moveTo(-15, -30);
-      ctx.lineTo(25, 5);
-      ctx.strokeStyle = detailStroke;
-      ctx.lineWidth = 8;
+      // Bishop central cross (+) & mitre seam
+      ctx.moveTo(256, 185);
+      ctx.lineTo(256, 260);
+      ctx.moveTo(234, 218);
+      ctx.lineTo(278, 218);
+      ctx.moveTo(195, 320);
+      ctx.quadraticCurveTo(256, 335, 317, 320);
       ctx.stroke();
     } else if (type === 'q') {
-      // Queen
-      ctx.beginPath();
-      ctx.moveTo(-70, -30);
-      ctx.lineTo(-50, -60);
-      ctx.lineTo(-30, -30);
-      ctx.lineTo(0, -75);
-      ctx.lineTo(30, -30);
-      ctx.lineTo(50, -60);
-      ctx.lineTo(70, -30);
-      ctx.quadraticCurveTo(45, 20, 65, 80);
-      ctx.lineTo(-65, 80);
-      ctx.quadraticCurveTo(-45, 20, -70, -30);
-      ctx.closePath();
-      ctx.fill();
+      // Queen cushion arc & waist line
+      ctx.moveTo(182, 365);
+      ctx.quadraticCurveTo(256, 380, 330, 365);
+      ctx.moveTo(205, 265);
+      ctx.quadraticCurveTo(256, 290, 307, 265);
       ctx.stroke();
-
-      // Crown pearls
-      const pearls = [-50, 0, 50];
-      ctx.fillStyle = detailStroke;
-      pearls.forEach(x => {
-        ctx.beginPath();
-        ctx.arc(x, x === 0 ? -75 : -60, 8, 0, Math.PI * 2);
-        ctx.fill();
-      });
     } else if (type === 'k') {
-      // King
-      // Cross
-      ctx.beginPath();
-      ctx.moveTo(0, -88);
-      ctx.lineTo(0, -58);
-      ctx.moveTo(-15, -73);
-      ctx.lineTo(15, -73);
-      ctx.lineWidth = 10;
-      ctx.stroke();
-
-      // Crown
-      ctx.lineWidth = 12;
-      ctx.beginPath();
-      ctx.moveTo(-65, -45);
-      ctx.lineTo(-45, -20);
-      ctx.lineTo(0, -45);
-      ctx.lineTo(45, -20);
-      ctx.lineTo(65, -45);
-      ctx.quadraticCurveTo(40, 20, 65, 80);
-      ctx.lineTo(-65, 80);
-      ctx.quadraticCurveTo(-40, 20, -65, -45);
-      ctx.closePath();
-      ctx.fill();
+      // King crown lobe lines & collar band
+      ctx.moveTo(185, 365);
+      ctx.quadraticCurveTo(256, 380, 327, 365);
+      ctx.moveTo(215, 285);
+      ctx.quadraticCurveTo(256, 310, 297, 285);
       ctx.stroke();
     }
 
@@ -559,18 +656,20 @@
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
 
-    const planeGeo = new THREE.PlaneGeometry(0.86, 0.86);
+    // Flat transparent plane resting cleanly on the board at y = 0.015
+    const planeGeo = new THREE.PlaneGeometry(0.88, 0.88);
     const planeMat = new THREE.MeshBasicMaterial({
       map: tex,
       transparent: true,
+      alphaTest: 0.02,
       depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -1
+      side: THREE.DoubleSide
     });
 
     const mesh = new THREE.Mesh(planeGeo, planeMat);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 0.02;
+    mesh.position.y = 0.015;
+    mesh.userData = { isFace: true };
     group.add(mesh);
 
     group.userData = {
@@ -707,17 +806,17 @@
       this.lightsGroup = new THREE.Group();
       this.scene.add(this.lightsGroup);
 
-      // Ambient Light
-      this.ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+      // Ambient Light (subtle fill to preserve 3D contrast & cylindrical self-shading)
+      this.ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
       this.lightsGroup.add(this.ambientLight);
 
       // Hemisphere Light (sky/ground color contrast)
-      this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x333344, 0.35);
+      this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x1a1d24, 0.40);
       this.hemiLight.position.set(0, 20, 0);
       this.lightsGroup.add(this.hemiLight);
 
       // Key Directional Light (Soft, glare-free illumination, casts crisp shadows)
-      this.mainDirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      this.mainDirLight = new THREE.DirectionalLight(0xffffff, 0.90);
       this.mainDirLight.position.set(5, 16, 8);
       this.mainDirLight.castShadow = true;
       this.mainDirLight.shadow.mapSize.width = 2048;
@@ -733,7 +832,7 @@
       this.lightsGroup.add(this.mainDirLight);
 
       // Rim / Fill Directional Light (opposite side for 3D depth)
-      this.rimDirLight = new THREE.DirectionalLight(0xddeeff, 0.45);
+      this.rimDirLight = new THREE.DirectionalLight(0xddeeff, 0.55);
       this.rimDirLight.position.set(-6, 10, -7);
       this.lightsGroup.add(this.rimDirLight);
 
@@ -1514,12 +1613,15 @@
         this.scene.background.set(0x0a0c10);
         this.inlayMat.color.set(0x94a3b8);
       } else {
-        // Classic: Clean, glare-free matte B&W
-        this.ambientLight.intensity = 0.65;
+        // Classic: Clean, glare-free matte B&W with high-contrast cylindrical self-shading
+        this.ambientLight.intensity = 0.42;
         this.mainDirLight.color.set(0xffffff);
-        this.mainDirLight.intensity = 0.85;
+        this.mainDirLight.intensity = 0.90;
         this.rimDirLight.color.set(0xddeeff);
-        this.rimDirLight.intensity = 0.45;
+        this.rimDirLight.intensity = 0.55;
+        this.hemiLight.color.set(0xffffff);
+        this.hemiLight.groundColor.set(0x1a1d24);
+        this.hemiLight.intensity = 0.40;
         this.neonCyanLight.intensity = 0;
         this.neonPinkLight.intensity = 0;
         this.scene.background.set(0x101216);

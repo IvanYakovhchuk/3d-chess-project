@@ -60,13 +60,13 @@ def verify_pieces3d():
         assert radius <= 0.5, f"Lathe radius exceeds 1.0 square bounds (max ~0.4): radius={radius}, y={y}"
         assert y >= 0, f"Lathe Y cannot be negative (must rest at y=0): y={y}"
 
-    print("[5] Checking high-contrast colors & felt base pads...")
-    assert "0xfbfaf5" in content, "Missing high-contrast white color 0xfbfaf5"
-    assert "0x14161b" in content, "Missing high-contrast black color 0x14161b"
+    print("[5] Checking 3D colors, accent trims & felt base pads...")
+    assert "0xf4f0e6" in content, "Missing white color 0xf4f0e6"
+    assert "0x1e222a" in content, "Missing black color 0x1e222a"
     assert "createFeltPad" in content, "Missing createFeltPad function"
     assert "isFelt" in content, "Missing isFelt metadata flag"
 
-    print("[6] Checking 3D Inverted-Hull Outlines & 2D Procedural Mode...")
+    print("[6] Checking 3D Accent Contours & Lichess/Chess.com 2D Mode...")
     assert "setMode" in content, "Missing setMode"
     assert "getMode" in content, "Missing getMode"
     assert "createPiece2DMesh" in content, "Missing createPiece2DMesh"
@@ -75,9 +75,10 @@ def verify_pieces3d():
     assert "isOutline" in content, "Missing isOutline metadata tag"
     assert "drawPieceVectorSilhouette" in content, "Missing drawPieceVectorSilhouette"
     assert "get2DPieceTexture" in content, "Missing get2DPieceTexture"
-    assert "THREE.BackSide" in content, "Missing BackSide for inverted hull"
+    assert "PlaneGeometry" in content, "Missing PlaneGeometry for flat 2D pieces"
+    assert "transparent: true" in content, "Missing transparent material for 2D pieces"
 
-    print("    Validated inverted-hull outline and 2D procedural vector silhouettes.")
+    print("    Validated clean 3D physical accent trims and Lichess-style 2D vector silhouettes.")
 
     print("\n>>> ALL PIECES3D CHECKS PASSED SUCCESSFULLY! <<<")
 

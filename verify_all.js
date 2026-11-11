@@ -295,6 +295,9 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
   class MockConeGeometry extends MockGeometry {
     constructor(r, h, s) { super(); this.parameters = { r, h, s }; }
   }
+  class MockPlaneGeometry extends MockGeometry {
+    constructor(w, h) { super(); this.parameters = { w, h }; }
+  }
   class MockCircleGeometry extends MockGeometry {
     constructor(r, s) { super(); this.parameters = { r, s }; }
   }
@@ -338,6 +341,7 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
     SphereGeometry: MockSphereGeometry,
     BoxGeometry: MockBoxGeometry,
     ConeGeometry: MockConeGeometry,
+    PlaneGeometry: MockPlaneGeometry,
     CircleGeometry: MockCircleGeometry,
     RingGeometry: MockRingGeometry,
     TorusGeometry: MockTorusGeometry,
@@ -402,7 +406,7 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
           if (child.isMesh) {
             childMeshCount++;
             shadowCheckedMeshes++;
-            if (!child.castShadow || !child.receiveShadow) {
+            if (!child.userData.isOutline && (!child.castShadow || !child.receiveShadow)) {
               console.warn(`Mesh ${type}_${color} child missing shadow`);
             }
           }
@@ -424,7 +428,7 @@ runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
   const piecesModule = require('./pieces3d.js');
   const sceneModule = require('./scene3d.js');
 
-  // 1. Verify 3D piece outlines
+  // 1. Verify 3D piece physical accent outlines and DoubleSide materials
   piecesModule.setMode('3d');
   assertEqual(piecesModule.getMode(), '3d', 'Mode is 3d');
 
@@ -436,20 +440,45 @@ runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
   for (const c of colors) {
     for (const t of pieceTypes) {
       const mesh3d = piecesModule.createPieceMesh(t, c, 'classic', '3d');
-      let hasOutline = false;
+      let hasAccentOutline = false;
+      let hasDoubleSideMaterial = false;
+      let hasBackSideClone = false;
+
       mesh3d.traverse(child => {
-        if (child.isMesh && child.userData.isOutline) {
-          hasOutline = true;
-          assertEqual(child.material.side, 1, `Outline mesh has side: THREE.BackSide (1)`);
+        if (child.isMesh) {
+          if (child.userData.isOutline) hasAccentOutline = true;
+          if (child.material && child.material.side === 2) hasDoubleSideMaterial = true;
+          if (child.material && child.material.side === 1) hasBackSideClone = true;
         }
       });
-      assert(hasOutline, `3D Piece ${t}_${c} has inverted-hull outline mesh`);
-      if (hasOutline) outlinedCount++;
+
+      assert(hasAccentOutline, `3D Piece ${t}_${c} has physical accent outline/trim`);
+      assert(hasDoubleSideMaterial, `3D Piece ${t}_${c} has DoubleSide material for true color rendering`);
+      assert(!hasBackSideClone, `3D Piece ${t}_${c} does NOT have flickering BackSide clone mesh`);
+      if (hasAccentOutline) outlinedCount++;
     }
   }
-  assertEqual(outlinedCount, 12, 'All 12 3D pieces have inverted-hull outlines');
+  assertEqual(outlinedCount, 12, 'All 12 3D pieces have physical accent outlines');
 
-  // 2. Verify 2D procedural token generation (48 combinations)
+  // Verify White Knight has true white material and Black Knight has black material
+  const whiteKnight = piecesModule.createPieceMesh('n', 'w', 'classic', '3d');
+  const blackKnight = piecesModule.createPieceMesh('n', 'b', 'classic', '3d');
+  let whiteKnightColorHex = null;
+  let blackKnightColorHex = null;
+  whiteKnight.traverse(node => {
+    if (node.isMesh && !node.userData.isFelt && !node.userData.isOutline) {
+      whiteKnightColorHex = node.material.color.hex;
+    }
+  });
+  blackKnight.traverse(node => {
+    if (node.isMesh && !node.userData.isFelt && !node.userData.isOutline) {
+      blackKnightColorHex = node.material.color.hex;
+    }
+  });
+  assertEqual(whiteKnightColorHex, 0xf4f0e6, 'White Knight renders in true ivory white (0xf4f0e6)');
+  assertEqual(blackKnightColorHex, 0x1e222a, 'Black Knight renders in true obsidian black (0x1e222a)');
+
+  // 2. Verify 2D authentic Lichess/Chess.com piece planes (48 combinations)
   piecesModule.setMode('2d');
   assertEqual(piecesModule.getMode(), '2d', 'Mode set to 2d');
 
@@ -463,30 +492,31 @@ runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
         assertEqual(mesh2d.userData.color, color, `2D userData.color is '${color}'`);
         assertEqual(mesh2d.userData.mode, '2d', `2D userData.mode is '2d'`);
         assertEqual(mesh2d.userData.is2D, true, `2D userData.is2D is true`);
-        assert(mesh2d.userData.height <= 0.05, `2D height is flat puck (<= 0.05)`);
+        assert(mesh2d.userData.height <= 0.05, `2D height is flat plane (<= 0.05)`);
 
-        // Verify subcomponents: felt pad, puck, ring, face
-        let hasFelt = false;
+        // Verify subcomponents: flat transparent plane (userData.isFace), NO pucks, NO rings
+        let hasFace = false;
         let hasPuck = false;
         let hasRing = false;
-        let hasFace = false;
         mesh2d.traverse(node => {
           if (node.isMesh) {
-            if (node.userData.isFelt) hasFelt = true;
+            if (node.userData.isFace) {
+              hasFace = true;
+              assert(node.material.transparent === true, '2D piece material is transparent');
+              assertEqual(node.material.depthWrite, false, '2D piece material depthWrite is false');
+            }
             if (node.userData.isPuck) hasPuck = true;
             if (node.userData.isRing) hasRing = true;
-            if (node.userData.isFace) hasFace = true;
           }
         });
-        assert(hasFelt, `2D piece ${type}_${color}_${theme} has felt base`);
-        assert(hasPuck, `2D piece ${type}_${color}_${theme} has puck cylinder body`);
-        assert(hasRing, `2D piece ${type}_${color}_${theme} has outer rim ring`);
-        assert(hasFace, `2D piece ${type}_${color}_${theme} has vector face mesh`);
+        assert(hasFace, `2D piece ${type}_${color}_${theme} has flat transparent piece plane`);
+        assert(!hasPuck, `2D piece ${type}_${color}_${theme} does NOT have cylinder puck`);
+        assert(!hasRing, `2D piece ${type}_${color}_${theme} does NOT have outer ring badge`);
         generated2DCount++;
       }
     }
   }
-  assertEqual(generated2DCount, 48, 'All 48 2D piece combinations generated successfully');
+  assertEqual(generated2DCount, 48, 'All 48 Lichess-style 2D piece combinations generated successfully');
 
   // Test dynamic 2D theme update
   const test2dPawn = piecesModule.createPiece2DMesh('p', 'w', 'classic');

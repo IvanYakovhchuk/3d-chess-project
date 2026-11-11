@@ -204,12 +204,13 @@
       case 'wood': {
         const tex = getProceduralTexture('wood', c);
         material = new MaterialClass({
-          color: isWhite ? 0xe2c69e : 0x3b2315,
+          color: isWhite ? 0xe2c69e : 0x3b2212,
           map: tex || null,
           roughness: 0.38,
           metalness: 0.02,
-          clearcoat: 0.25,
-          clearcoatRoughness: 0.20
+          clearcoat: 0.20,
+          clearcoatRoughness: 0.18,
+          side: THREE.DoubleSide
         });
         break;
       }
@@ -217,12 +218,13 @@
       case 'marble': {
         const tex = getProceduralTexture('marble', c);
         material = new MaterialClass({
-          color: isWhite ? 0xfbfaf5 : 0x14161b,
+          color: isWhite ? 0xf4f0e6 : 0x1e222a,
           map: tex || null,
-          roughness: isWhite ? 0.35 : 0.32,
-          metalness: isWhite ? 0.02 : 0.08,
-          clearcoat: isWhite ? 0.15 : 0.20,
-          clearcoatRoughness: 0.15
+          roughness: isWhite ? 0.38 : 0.30,
+          metalness: isWhite ? 0.04 : 0.10,
+          clearcoat: 0.25,
+          clearcoatRoughness: 0.12,
+          side: THREE.DoubleSide
         });
         break;
       }
@@ -234,16 +236,18 @@
             color: 0x00ffff,
             emissive: 0x009ec3,
             emissiveIntensity: 0.55,
-            roughness: 0.18,
-            metalness: 0.82
+            roughness: 0.25,
+            metalness: 0.70,
+            side: THREE.DoubleSide
           });
         } else {
           material = new THREE.MeshStandardMaterial({
             color: 0xff007f,
             emissive: 0xa8004f,
             emissiveIntensity: 0.55,
-            roughness: 0.18,
-            metalness: 0.82
+            roughness: 0.25,
+            metalness: 0.70,
+            side: THREE.DoubleSide
           });
         }
         break;
@@ -251,22 +255,24 @@
 
       case 'classic':
       default: {
-        // High-contrast Tournament Staunton: Crisp Ivory White vs Deep Obsidian Black
+        // High-contrast Tournament Staunton: Rich Warm Ivory vs Deep Obsidian Slate
         if (isWhite) {
           material = new MaterialClass({
-            color: 0xfbfaf5,
-            roughness: 0.35,
-            metalness: 0.02,
-            clearcoat: 0.15,
-            clearcoatRoughness: 0.18
+            color: 0xf4f0e6,
+            roughness: 0.45,
+            metalness: 0.05,
+            clearcoat: 0.10,
+            clearcoatRoughness: 0.18,
+            side: THREE.DoubleSide
           });
         } else {
           material = new MaterialClass({
-            color: 0x14161b,
-            roughness: 0.32,
-            metalness: 0.08,
-            clearcoat: 0.20,
-            clearcoatRoughness: 0.18
+            color: 0x1e222a,
+            roughness: 0.35,
+            metalness: 0.12,
+            clearcoat: 0.25,
+            clearcoatRoughness: 0.18,
+            side: THREE.DoubleSide
           });
         }
         break;
@@ -339,8 +345,8 @@
   }
 
   /**
-   * Outline Material Factory: Inverted-Hull Silhouette Outline (THREE.BackSide)
-   * White pieces get a crisp dark obsidian outline; Black pieces get a bright silver-white outline.
+   * Outline / Accent Trim Material Factory:
+   * White pieces get a crisp dark obsidian accent (#14171d); Black pieces get a bright silver accent (#e2e8f0).
    */
   function getOutlineMaterial(color, theme) {
     const THREE = getTHREE();
@@ -353,46 +359,60 @@
     if (th === 'neon') {
       outlineColor = (c === 'w') ? 0x00ffff : 0xff007f;
     } else {
-      // White pieces get dark obsidian contour (#111318); Black pieces get bright silver/white contour (#e2e8f0)
-      outlineColor = (c === 'w') ? 0x111318 : 0xe2e8f0;
+      // White pieces get dark obsidian accent (#14171d); Black pieces get bright silver accent (#e2e8f0)
+      outlineColor = (c === 'w') ? 0x14171d : 0xe2e8f0;
     }
 
-    const MaterialClass = THREE.MeshBasicMaterial || THREE.MeshStandardMaterial;
+    const MaterialClass = THREE.MeshStandardMaterial || THREE.MeshBasicMaterial;
     const mat = new MaterialClass({
       color: outlineColor,
-      side: THREE.BackSide,
-      depthWrite: true,
-      depthTest: true
+      roughness: 0.40,
+      metalness: 0.20,
+      side: THREE.DoubleSide
     });
 
     outlineMaterialCache.set(key, mat);
     return mat;
   }
 
+  const PIECE_TRIM_SPECS = {
+    p: { baseR: 0.27, collarR: 0.170, collarY: 0.62 },
+    r: { baseR: 0.30, collarR: 0.280, collarY: 0.96 },
+    n: { baseR: 0.30, collarR: 0.210, collarY: 0.29 },
+    b: { baseR: 0.30, collarR: 0.205, collarY: 0.79 },
+    q: { baseR: 0.33, collarR: 0.235, collarY: 0.98 },
+    k: { baseR: 0.35, collarR: 0.255, collarY: 1.12 }
+  };
+
   /**
-   * Helper: Add Inverted-Hull Silhouette Outline Mesh to 3D Piece Group
+   * Helper: Add Clean 3D Physical Accent Trim Torus Rings to Piece Group
+   * (Replaces glitchy BackSide inverted-hull scaling with crisp, non-coplanar 3D accent contours)
    */
-  function addInvertedHullOutline(pieceGroup, color, theme) {
+  function addInvertedHullOutline(pieceGroup, color, theme, type) {
     const THREE = getTHREE();
+    const t = normalizeType(type || (pieceGroup.userData && pieceGroup.userData.type));
+    const spec = PIECE_TRIM_SPECS[t] || PIECE_TRIM_SPECS.p;
     const outlineMat = getOutlineMaterial(color, theme);
-    const baseMeshes = [];
 
-    pieceGroup.traverse((node) => {
-      if (node.isMesh && !node.userData.isFelt && !node.userData.isSlot && !node.userData.isOutline) {
-        baseMeshes.push(node);
-      }
-    });
+    // 1. Base trim ring at y = 0.018
+    const baseTrimGeom = new THREE.TorusGeometry(spec.baseR * 1.005, 0.013, 12, 32);
+    const baseTrim = new THREE.Mesh(baseTrimGeom, outlineMat);
+    baseTrim.rotation.x = Math.PI / 2;
+    baseTrim.position.y = 0.018;
+    baseTrim.userData.isOutline = true;
+    baseTrim.castShadow = false;
+    baseTrim.receiveShadow = false;
+    pieceGroup.add(baseTrim);
 
-    for (const node of baseMeshes) {
-      const outlineMesh = new THREE.Mesh(node.geometry, outlineMat);
-      outlineMesh.position.copy(node.position);
-      outlineMesh.rotation.copy(node.rotation);
-      outlineMesh.scale.copy(node.scale).multiplyScalar(1.036);
-      outlineMesh.userData.isOutline = true;
-      outlineMesh.castShadow = false;
-      outlineMesh.receiveShadow = false;
-      pieceGroup.add(outlineMesh);
-    }
+    // 2. Collar / waist accent ring at piece's collar height
+    const collarTrimGeom = new THREE.TorusGeometry(spec.collarR * 1.01, 0.011, 12, 32);
+    const collarTrim = new THREE.Mesh(collarTrimGeom, outlineMat);
+    collarTrim.rotation.x = Math.PI / 2;
+    collarTrim.position.y = spec.collarY;
+    collarTrim.userData.isOutline = true;
+    collarTrim.castShadow = false;
+    collarTrim.receiveShadow = false;
+    pieceGroup.add(collarTrim);
   }
 
   // =========================================================================
@@ -573,24 +593,28 @@
       group.add(maneMesh);
     }
 
-    // Sculpted Eyes
+    // Sculpted Eyes (tagged isOutline for contrasting accent)
     const eyeGeom = new THREE.SphereGeometry(0.024, 12, 12);
     const leftEye = new THREE.Mesh(eyeGeom);
     leftEye.position.set(-0.11, 1.02, -0.13);
+    leftEye.userData.isOutline = true;
     group.add(leftEye);
 
     const rightEye = new THREE.Mesh(eyeGeom);
     rightEye.position.set(0.11, 1.02, -0.13);
+    rightEye.userData.isOutline = true;
     group.add(rightEye);
 
-    // Sculpted Nostrils
+    // Sculpted Nostrils (tagged isOutline for contrasting accent)
     const nostrilGeom = new THREE.SphereGeometry(0.016, 8, 8);
     const leftNostril = new THREE.Mesh(nostrilGeom);
     leftNostril.position.set(-0.045, 0.82, -0.26);
+    leftNostril.userData.isOutline = true;
     group.add(leftNostril);
 
     const rightNostril = new THREE.Mesh(nostrilGeom);
     rightNostril.position.set(0.045, 0.82, -0.26);
+    rightNostril.userData.isOutline = true;
     group.add(rightNostril);
 
     return group;
@@ -820,253 +844,288 @@
   }
 
   // =========================================================================
-  // 2D PROCEDURAL VECTOR CHESS PIECES (Canvas2D paths -> CanvasTexture)
+  // 2D PROCEDURAL VECTOR CHESS PIECES (Lichess cburnett / Chess.com Neo style)
+  // Transparent plane with authentic vector silhouettes (NO round pucks/rings)
   // =========================================================================
 
-  function drawPieceVectorSilhouette(ctx, type, cx, cy) {
+  function drawPieceVectorSilhouette(ctx, type, cx) {
     ctx.beginPath();
     switch (type) {
       case 'p': {
-        // Pawn: base pedestal, tapered stem, collar, spherical head
-        ctx.moveTo(cx - 85, cy + 135);
-        ctx.lineTo(cx + 85, cy + 135);
-        ctx.quadraticCurveTo(cx + 85, cy + 112, cx + 60, cy + 106);
-        ctx.quadraticCurveTo(cx + 34, cy + 55, cx + 22, cy + 12);
-        ctx.lineTo(cx + 42, cy + 8);
-        ctx.quadraticCurveTo(cx + 42, cy - 8, cx + 18, cy - 12);
-        ctx.arc(cx, cy - 65, 54, 0.45, Math.PI - 0.45, true);
-        ctx.quadraticCurveTo(cx - 42, cy - 8, cx - 42, cy + 8);
-        ctx.lineTo(cx - 22, cy + 12);
-        ctx.quadraticCurveTo(cx - 34, cy + 55, cx - 60, cy + 106);
-        ctx.quadraticCurveTo(cx - 85, cy + 112, cx - 85, cy + 135);
+        // Authentic Lichess Pawn: wide flat base, double band, concave neck, collar, round head
+        ctx.moveTo(cx - 110, 440);
+        ctx.lineTo(cx + 110, 440);
+        ctx.quadraticCurveTo(cx + 110, 415, cx + 88, 412);
+        ctx.lineTo(cx + 88, 395);
+        ctx.quadraticCurveTo(cx + 42, 330, cx + 32, 255);
+        ctx.lineTo(cx + 52, 245);
+        ctx.lineTo(cx + 52, 225);
+        ctx.lineTo(cx + 26, 222);
+        // Head sphere
+        ctx.arc(cx, 155, 62, 0.46, Math.PI - 0.46, true);
+        ctx.lineTo(cx - 52, 225);
+        ctx.lineTo(cx - 52, 245);
+        ctx.lineTo(cx - 32, 255);
+        ctx.quadraticCurveTo(cx - 42, 330, cx - 88, 395);
+        ctx.lineTo(cx - 88, 412);
+        ctx.quadraticCurveTo(cx - 110, 415, cx - 110, 440);
         ctx.closePath();
         break;
       }
 
       case 'r': {
-        // Rook: base, column, flared parapet with 3 merlons and 2 crenels
-        ctx.moveTo(cx - 90, cy + 135);
-        ctx.lineTo(cx + 90, cy + 135);
-        ctx.quadraticCurveTo(cx + 90, cy + 112, cx + 66, cy + 106);
-        ctx.lineTo(cx + 62, cy - 30);
-        ctx.lineTo(cx + 92, cy - 55);
+        // Authentic Lichess Rook: wide stepped base, straight tower, flared cornice, 3 merlons
+        ctx.moveTo(cx - 115, 440);
+        ctx.lineTo(cx + 115, 440);
+        ctx.quadraticCurveTo(cx + 115, 415, cx + 95, 408);
+        ctx.lineTo(cx + 95, 385);
+        ctx.lineTo(cx + 72, 385);
+        ctx.lineTo(cx + 72, 215);
+        ctx.lineTo(cx + 105, 175);
         // Merlon 3 (right)
-        ctx.lineTo(cx + 92, cy - 120);
-        ctx.lineTo(cx + 54, cy - 120);
-        ctx.lineTo(cx + 54, cy - 80);
+        ctx.lineTo(cx + 105, 115);
+        ctx.lineTo(cx + 65, 115);
+        ctx.lineTo(cx + 65, 150);
         // Crenel 2
-        ctx.lineTo(cx + 24, cy - 80);
+        ctx.lineTo(cx + 30, 150);
         // Merlon 2 (center)
-        ctx.lineTo(cx + 24, cy - 120);
-        ctx.lineTo(cx - 24, cy - 120);
-        ctx.lineTo(cx - 24, cy - 80);
+        ctx.lineTo(cx + 30, 115);
+        ctx.lineTo(cx - 30, 115);
+        ctx.lineTo(cx - 30, 150);
         // Crenel 1
-        ctx.lineTo(cx - 54, cy - 80);
+        ctx.lineTo(cx - 65, 150);
         // Merlon 1 (left)
-        ctx.lineTo(cx - 54, cy - 120);
-        ctx.lineTo(cx - 92, cy - 120);
-        ctx.lineTo(cx - 92, cy - 55);
-        ctx.lineTo(cx - 62, cy - 30);
-        ctx.lineTo(cx - 66, cy + 106);
-        ctx.quadraticCurveTo(cx - 90, cy + 112, cx - 90, cy + 135);
+        ctx.lineTo(cx - 65, 115);
+        ctx.lineTo(cx - 105, 115);
+        ctx.lineTo(cx - 105, 175);
+        ctx.lineTo(cx - 72, 215);
+        ctx.lineTo(cx - 72, 385);
+        ctx.lineTo(cx - 95, 385);
+        ctx.lineTo(cx - 95, 408);
+        ctx.quadraticCurveTo(cx - 115, 415, cx - 115, 440);
         ctx.closePath();
         break;
       }
 
       case 'n': {
-        // Knight: arched neck, ears, brow, snout, jaw, chest
-        ctx.moveTo(cx - 80, cy + 135);
-        ctx.lineTo(cx + 80, cy + 135);
-        ctx.quadraticCurveTo(cx + 80, cy + 112, cx + 60, cy + 106);
-        ctx.quadraticCurveTo(cx + 85, cy + 30, cx + 75, cy - 30);
-        ctx.quadraticCurveTo(cx + 58, cy - 85, cx + 16, cy - 118);
+        // Authentic Lichess Knight horse head facing LEFT
+        ctx.moveTo(140, 440);
+        ctx.lineTo(375, 440);
+        ctx.quadraticCurveTo(375, 415, 360, 405);
+        ctx.quadraticCurveTo(385, 310, 375, 220);
+        ctx.quadraticCurveTo(365, 145, 325, 105);
+        ctx.lineTo(290, 72);
         // Right ear
-        ctx.lineTo(cx + 26, cy - 148);
-        ctx.lineTo(cx + 6, cy - 128);
+        ctx.lineTo(290, 42);
+        ctx.lineTo(265, 75);
         // Left ear
-        ctx.lineTo(cx - 4, cy - 148);
-        ctx.lineTo(cx - 18, cy - 118);
-        // Forehead & muzzle
-        ctx.quadraticCurveTo(cx - 55, cy - 88, cx - 80, cy - 45);
-        ctx.lineTo(cx - 106, cy - 15);
-        // Snout & mouth
-        ctx.quadraticCurveTo(cx - 100, cy + 10, cx - 80, cy + 10);
-        ctx.lineTo(cx - 65, cy + 15);
-        ctx.lineTo(cx - 60, cy + 5);
-        // Under-jaw & throat
-        ctx.quadraticCurveTo(cx - 35, cy + 30, cx - 24, cy + 55);
-        // Chest swell
-        ctx.quadraticCurveTo(cx - 55, cy + 85, cx - 60, cy + 106);
-        ctx.quadraticCurveTo(cx - 80, cy + 112, cx - 80, cy + 135);
+        ctx.lineTo(252, 48);
+        ctx.lineTo(232, 85);
+        // Forehead down to snout (facing left)
+        ctx.quadraticCurveTo(185, 135, 142, 192);
+        ctx.lineTo(110, 240); // snout apex
+        // Snout curl & mouth slit
+        ctx.quadraticCurveTo(112, 275, 136, 275);
+        ctx.lineTo(168, 260); // mouth cleft
+        ctx.lineTo(144, 290); // lower jaw
+        ctx.quadraticCurveTo(180, 308, 212, 296); // ganache curve
+        ctx.quadraticCurveTo(168, 350, 152, 405); // throat/chest
+        ctx.quadraticCurveTo(140, 415, 140, 440);
         ctx.closePath();
         break;
       }
 
       case 'b': {
-        // Bishop: base, stem, double collar, teardrop mitre
-        ctx.moveTo(cx - 85, cy + 135);
-        ctx.lineTo(cx + 85, cy + 135);
-        ctx.quadraticCurveTo(cx + 85, cy + 112, cx + 60, cy + 106);
-        ctx.quadraticCurveTo(cx + 34, cy + 65, cx + 24, cy + 40);
-        ctx.lineTo(cx + 44, cy + 35);
-        ctx.quadraticCurveTo(cx + 44, cy + 18, cx + 18, cy + 14);
-        // Mitre bulb
-        ctx.quadraticCurveTo(cx + 68, cy - 25, cx + 54, cy - 75);
-        ctx.quadraticCurveTo(cx + 32, cy - 120, cx, cy - 135);
-        ctx.quadraticCurveTo(cx - 32, cy - 120, cx - 54, cy - 75);
-        ctx.quadraticCurveTo(cx - 68, cy - 25, cx - 18, cy + 14);
-        ctx.lineTo(cx - 44, cy + 18);
-        ctx.quadraticCurveTo(cx - 44, cy + 35, cx - 24, cy + 40);
-        ctx.quadraticCurveTo(cx - 34, cy + 65, cx - 60, cy + 106);
-        ctx.quadraticCurveTo(cx - 85, cy + 112, cx - 85, cy + 135);
+        // Authentic Lichess Bishop: tiered base, collar, mitre dome with finial orb
+        ctx.moveTo(cx - 110, 440);
+        ctx.lineTo(cx + 110, 440);
+        ctx.quadraticCurveTo(cx + 110, 415, cx + 88, 408);
+        ctx.lineTo(cx + 88, 385);
+        ctx.quadraticCurveTo(cx + 42, 350, cx + 28, 335);
+        ctx.lineTo(cx + 52, 330);
+        ctx.lineTo(cx + 42, 312);
+        // Plump Mitre dome
+        ctx.quadraticCurveTo(cx + 92, 240, cx + 64, 180);
+        ctx.quadraticCurveTo(cx + 36, 130, cx, 115); // dome apex
+        ctx.quadraticCurveTo(cx - 36, 130, cx - 64, 180);
+        ctx.quadraticCurveTo(cx - 92, 240, cx - 42, 312);
+        ctx.lineTo(cx - 52, 330);
+        ctx.lineTo(cx - 28, 335);
+        ctx.quadraticCurveTo(cx - 42, 350, cx - 88, 385);
+        ctx.lineTo(cx - 88, 408);
+        ctx.quadraticCurveTo(cx - 110, 415, cx - 110, 440);
         ctx.closePath();
         break;
       }
 
       case 'q': {
-        // Queen: base, stem, collar, 5-point coronet crown
-        ctx.moveTo(cx - 95, cy + 135);
-        ctx.lineTo(cx + 95, cy + 135);
-        ctx.quadraticCurveTo(cx + 95, cy + 112, cx + 70, cy + 106);
-        ctx.quadraticCurveTo(cx + 40, cy + 65, cx + 28, cy + 40);
-        ctx.lineTo(cx + 52, cy + 35);
-        ctx.lineTo(cx + 42, cy + 20);
-        // 5 Coronet spikes
-        ctx.lineTo(cx + 84, cy - 40);
-        ctx.lineTo(cx + 94, cy - 80);
-        ctx.lineTo(cx + 64, cy - 50);
-        ctx.lineTo(cx + 48, cy - 105);
-        ctx.lineTo(cx + 24, cy - 55);
-        ctx.lineTo(cx, cy - 120); // center
-        ctx.lineTo(cx - 24, cy - 55);
-        ctx.lineTo(cx - 48, cy - 105);
-        ctx.lineTo(cx - 64, cy - 50);
-        ctx.lineTo(cx - 94, cy - 80);
-        ctx.lineTo(cx - 84, cy - 40);
-        ctx.lineTo(cx - 42, cy + 20);
-        ctx.lineTo(cx - 52, cy + 35);
-        ctx.lineTo(cx - 28, cy + 40);
-        ctx.quadraticCurveTo(cx - 40, cy + 65, cx - 70, cy + 106);
-        ctx.quadraticCurveTo(cx - 95, cy + 112, cx - 95, cy + 135);
+        // Authentic Lichess Queen: tiered base, collar, 5-point scalloped coronet
+        ctx.moveTo(cx - 118, 440);
+        ctx.lineTo(cx + 118, 440);
+        ctx.quadraticCurveTo(cx + 118, 415, cx + 96, 408);
+        ctx.lineTo(cx + 96, 385);
+        ctx.quadraticCurveTo(cx + 52, 350, cx + 38, 330);
+        ctx.lineTo(cx + 62, 325);
+        ctx.lineTo(cx + 52, 305);
+        // 5 Coronet points & 4 scallops
+        ctx.lineTo(cx + 118, 175); // point 5
+        ctx.quadraticCurveTo(cx + 85, 225, cx + 64, 140); // point 4
+        ctx.quadraticCurveTo(cx + 36, 205, cx, 118); // center point 3
+        ctx.quadraticCurveTo(cx - 36, 205, cx - 64, 140); // point 2
+        ctx.quadraticCurveTo(cx - 85, 225, cx - 118, 175); // point 1
+        ctx.lineTo(cx - 52, 305);
+        ctx.lineTo(cx - 62, 325);
+        ctx.lineTo(cx - 38, 330);
+        ctx.quadraticCurveTo(cx - 52, 350, cx - 96, 385);
+        ctx.lineTo(cx - 96, 408);
+        ctx.quadraticCurveTo(cx - 118, 415, cx - 118, 440);
         ctx.closePath();
         break;
       }
 
       case 'k': {
-        // King: base, column, gallery, crown dome & Cross Pattée
-        ctx.moveTo(cx - 100, cy + 135);
-        ctx.lineTo(cx + 100, cy + 135);
-        ctx.quadraticCurveTo(cx + 100, cy + 112, cx + 75, cy + 106);
-        ctx.quadraticCurveTo(cx + 45, cy + 65, cx + 34, cy + 40);
-        ctx.lineTo(cx + 58, cy + 35);
-        ctx.lineTo(cx + 48, cy + 20);
-        // Cupola dome
-        ctx.quadraticCurveTo(cx + 88, cy - 10, cx + 78, cy - 65);
-        ctx.quadraticCurveTo(cx + 48, cy - 95, cx + 18, cy - 100);
-        // Cross finial
-        ctx.lineTo(cx + 34, cy - 100);
-        ctx.lineTo(cx + 34, cy - 122);
-        ctx.lineTo(cx + 14, cy - 122);
-        ctx.lineTo(cx + 14, cy - 154);
-        ctx.lineTo(cx - 14, cy - 154);
-        ctx.lineTo(cx - 14, cy - 122);
-        ctx.lineTo(cx - 34, cy - 122);
-        ctx.lineTo(cx - 34, cy - 100);
-        ctx.lineTo(cx - 18, cy - 100);
-        // Left cupola dome
-        ctx.quadraticCurveTo(cx - 48, cy - 95, cx - 78, cy - 65);
-        ctx.quadraticCurveTo(cx - 88, cy - 10, cx - 48, cy + 20);
-        ctx.lineTo(cx - 58, cy + 35);
-        ctx.lineTo(cx - 34, cy + 40);
-        ctx.quadraticCurveTo(cx - 45, cy + 65, cx - 75, cy + 106);
-        ctx.quadraticCurveTo(cx - 100, cy + 112, cx - 100, cy + 135);
+        // Authentic Lichess King: tiered base, collar, symmetrical crown lobes, apex cross
+        ctx.moveTo(cx - 120, 440);
+        ctx.lineTo(cx + 120, 440);
+        ctx.quadraticCurveTo(cx + 120, 415, cx + 98, 408);
+        ctx.lineTo(cx + 98, 385);
+        ctx.quadraticCurveTo(cx + 56, 350, cx + 42, 330);
+        ctx.lineTo(cx + 66, 325);
+        ctx.lineTo(cx + 56, 305);
+        // Crown lobes curving out and meeting at central dip
+        ctx.quadraticCurveTo(cx + 115, 240, cx + 85, 175);
+        ctx.quadraticCurveTo(cx + 42, 165, cx + 18, 185);
+        // Cross Finial
+        ctx.lineTo(cx + 18, 130);
+        ctx.lineTo(cx + 42, 130);
+        ctx.lineTo(cx + 42, 102);
+        ctx.lineTo(cx + 18, 102);
+        ctx.lineTo(cx + 18, 68);
+        ctx.lineTo(cx - 18, 68);
+        ctx.lineTo(cx - 18, 102);
+        ctx.lineTo(cx - 42, 102);
+        ctx.lineTo(cx - 42, 130);
+        ctx.lineTo(cx - 18, 130);
+        ctx.lineTo(cx - 18, 185);
+        // Left crown lobe
+        ctx.quadraticCurveTo(cx - 42, 165, cx - 85, 175);
+        ctx.quadraticCurveTo(cx - 115, 240, cx - 56, 305);
+        ctx.lineTo(cx - 66, 325);
+        ctx.lineTo(cx - 42, 330);
+        ctx.quadraticCurveTo(cx - 56, 350, cx - 98, 385);
+        ctx.lineTo(cx - 98, 408);
+        ctx.quadraticCurveTo(cx - 120, 415, cx - 120, 440);
         ctx.closePath();
         break;
       }
     }
   }
 
-  function drawPieceInnerDetails(ctx, type, cx, cy) {
+  function drawPieceInnerDetails(ctx, type, cx) {
     ctx.beginPath();
     switch (type) {
       case 'p': {
-        // Base ring line & collar line
-        ctx.moveTo(cx - 55, cy + 118);
-        ctx.lineTo(cx + 55, cy + 118);
-        ctx.moveTo(cx - 32, cy + 8);
-        ctx.lineTo(cx + 32, cy + 8);
+        // Base bands
+        ctx.beginPath();
+        ctx.moveTo(cx - 95, 412);
+        ctx.lineTo(cx + 95, 412);
+        ctx.stroke();
+        // Collar band
+        ctx.beginPath();
+        ctx.moveTo(cx - 48, 235);
+        ctx.lineTo(cx + 48, 235);
+        ctx.stroke();
+        // Head highlight arc
+        ctx.beginPath();
+        ctx.arc(cx - 16, 142, 32, -Math.PI * 0.72, -Math.PI * 0.12);
         ctx.stroke();
         break;
       }
 
       case 'r': {
-        // Cornice shelf line & base ring
-        ctx.moveTo(cx - 58, cy + 118);
-        ctx.lineTo(cx + 58, cy + 118);
-        ctx.moveTo(cx - 65, cy - 48);
-        ctx.lineTo(cx + 65, cy - 48);
-        // Arrow slit window in tower center
-        ctx.moveTo(cx, cy - 15);
-        ctx.lineTo(cx, cy + 45);
+        // Base seam
+        ctx.beginPath();
+        ctx.moveTo(cx - 100, 410);
+        ctx.lineTo(cx + 100, 410);
+        // Cornice band
+        ctx.moveTo(cx - 72, 215);
+        ctx.lineTo(cx + 72, 215);
+        ctx.moveTo(cx - 95, 175);
+        ctx.lineTo(cx + 95, 175);
+        // Arrow slit window in center
+        ctx.moveTo(cx, 260);
+        ctx.lineTo(cx, 330);
         ctx.stroke();
         break;
       }
 
       case 'n': {
-        // Eye
+        // Sculpted almond eye
         ctx.beginPath();
-        ctx.arc(cx - 42, cy - 52, 6, 0, Math.PI * 2);
+        ctx.arc(218, 148, 7, 0, Math.PI * 2);
         ctx.fill();
-        // Nostril
+        // Nostril curl
         ctx.beginPath();
-        ctx.arc(cx - 86, cy - 6, 4, 0, Math.PI * 2);
+        ctx.arc(140, 252, 5, 0, Math.PI * 2);
         ctx.fill();
         // Mane ridge curves
         ctx.beginPath();
-        ctx.moveTo(cx + 35, cy - 80);
-        ctx.quadraticCurveTo(cx + 15, cy - 60, cx + 30, cy - 35);
-        ctx.moveTo(cx + 50, cy - 45);
-        ctx.quadraticCurveTo(cx + 25, cy - 20, cx + 45, cy + 5);
-        ctx.moveTo(cx + 55, cy - 5);
-        ctx.quadraticCurveTo(cx + 30, cy + 20, cx + 45, cy + 50);
+        ctx.moveTo(330, 125);
+        ctx.quadraticCurveTo(300, 155, 325, 190);
+        ctx.moveTo(350, 195);
+        ctx.quadraticCurveTo(315, 230, 345, 270);
+        ctx.moveTo(360, 280);
+        ctx.quadraticCurveTo(320, 315, 350, 355);
+        // Jaw outline
+        ctx.moveTo(144, 290);
+        ctx.quadraticCurveTo(180, 308, 212, 296);
         ctx.stroke();
         break;
       }
 
       case 'b': {
-        // Base line & collar line
-        ctx.moveTo(cx - 55, cy + 118);
-        ctx.lineTo(cx + 55, cy + 118);
-        ctx.moveTo(cx - 35, cy + 28);
-        ctx.lineTo(cx + 35, cy + 28);
-        // Iconic diagonal slash slot
-        ctx.moveTo(cx + 36, cy - 90);
-        ctx.lineTo(cx - 12, cy - 42);
+        // Base seams
+        ctx.beginPath();
+        ctx.moveTo(cx - 95, 410);
+        ctx.lineTo(cx + 95, 410);
+        ctx.moveTo(cx - 48, 325);
+        ctx.lineTo(cx + 48, 325);
+        ctx.stroke();
+        // Central '+' cross inside mitre
+        ctx.beginPath();
+        ctx.moveTo(cx, 195);
+        ctx.lineTo(cx, 260);
+        ctx.moveTo(cx - 26, 222);
+        ctx.lineTo(cx + 26, 222);
         ctx.stroke();
         // Finial orb atop mitre
         ctx.beginPath();
-        ctx.arc(cx, cy - 148, 14, 0, Math.PI * 2);
+        ctx.arc(cx, 95, 20, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         break;
       }
 
       case 'q': {
-        // Base line & waist line
-        ctx.moveTo(cx - 65, cy + 118);
-        ctx.lineTo(cx + 65, cy + 118);
-        ctx.moveTo(cx - 40, cy + 28);
-        ctx.lineTo(cx + 40, cy + 28);
+        // Base seams
+        ctx.beginPath();
+        ctx.moveTo(cx - 100, 410);
+        ctx.lineTo(cx + 100, 410);
+        ctx.moveTo(cx - 55, 325);
+        ctx.lineTo(cx + 55, 325);
+        // Coronet base cushion lobes
+        ctx.moveTo(cx - 85, 290);
+        ctx.quadraticCurveTo(cx, 320, cx + 85, 290);
         ctx.stroke();
-        // Pearls on crown spikes
-        const pearlPts = [
-          [cx, cy - 132],
-          [cx - 48, cy - 117], [cx + 48, cy - 117],
-          [cx - 94, cy - 92],  [cx + 94, cy - 92]
+        // 5 Round Pearls on top of coronet points
+        const pearls = [
+          [cx, 98],
+          [cx - 64, 122], [cx + 64, 122],
+          [cx - 118, 156], [cx + 118, 156]
         ];
-        for (const [px, py] of pearlPts) {
+        for (const [px, py] of pearls) {
           ctx.beginPath();
-          ctx.arc(px, py, 11, 0, Math.PI * 2);
+          ctx.arc(px, py, 16, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
@@ -1074,14 +1133,20 @@
       }
 
       case 'k': {
-        // Base line & collar line
-        ctx.moveTo(cx - 70, cy + 118);
-        ctx.lineTo(cx + 70, cy + 118);
-        ctx.moveTo(cx - 45, cy + 28);
-        ctx.lineTo(cx + 45, cy + 28);
-        // Cupola headband
-        ctx.moveTo(cx - 55, cy - 25);
-        ctx.lineTo(cx + 55, cy - 25);
+        // Base seams
+        ctx.beginPath();
+        ctx.moveTo(cx - 105, 410);
+        ctx.lineTo(cx + 105, 410);
+        ctx.moveTo(cx - 58, 325);
+        ctx.lineTo(cx + 58, 325);
+        // Symmetrical inner crown lobe arcs
+        ctx.moveTo(cx - 75, 210);
+        ctx.quadraticCurveTo(cx - 30, 270, cx - 12, 305);
+        ctx.moveTo(cx + 75, 210);
+        ctx.quadraticCurveTo(cx + 30, 270, cx + 12, 305);
+        // Center crown arch jewel line
+        ctx.moveTo(cx - 32, 230);
+        ctx.quadraticCurveTo(cx, 245, cx + 32, 230);
         ctx.stroke();
         break;
       }
@@ -1089,7 +1154,7 @@
   }
 
   /**
-   * Procedural Canvas Texture Factory for 2D Piece Vector Badges
+   * Procedural Canvas Texture Factory for Lichess/Chess.com 2D Vector Pieces
    */
   function get2DPieceTexture(type, color, theme) {
     const t = normalizeType(type);
@@ -1110,67 +1175,63 @@
 
       const isWhite = c === 'w';
       const cx = 256;
-      const cy = 256;
 
+      // 100% Transparent background (no pucks, circles, or badge discs)
       ctx.clearRect(0, 0, 512, 512);
 
-      let badgeBg, badgeBorder, pieceFill, pieceStroke, detailStroke;
+      let pieceFill, pieceStroke, detailStroke, haloStroke;
       if (th === 'neon') {
-        badgeBg = isWhite ? '#002533' : '#33001a';
-        badgeBorder = isWhite ? '#00ffff' : '#ff007f';
         pieceFill = isWhite ? '#00ffff' : '#ff007f';
-        pieceStroke = '#ffffff';
-        detailStroke = isWhite ? '#003344' : '#440022';
+        pieceStroke = isWhite ? '#003344' : '#440022';
+        detailStroke = '#ffffff';
+        haloStroke = isWhite ? 'rgba(0, 255, 255, 0.55)' : 'rgba(255, 0, 127, 0.55)';
       } else if (th === 'wood') {
-        badgeBg = isWhite ? '#ecd8b8' : '#2d180c';
-        badgeBorder = isWhite ? '#5c3a21' : '#cca072';
-        pieceFill = isWhite ? '#fcf6ec' : '#1a0d06';
-        pieceStroke = isWhite ? '#3d2516' : '#ecd8b8';
-        detailStroke = isWhite ? '#8c5932' : '#dcb487';
+        pieceFill = isWhite ? '#fdf6e7' : '#2c1609';
+        pieceStroke = isWhite ? '#3d2516' : '#0a0c0e';
+        detailStroke = isWhite ? '#3d2516' : '#f1f5f9';
+        haloStroke = isWhite ? 'rgba(61, 37, 22, 0.25)' : 'rgba(255, 255, 255, 0.75)';
       } else {
         // 'classic' & 'marble'
-        badgeBg = isWhite ? '#f8fafc' : '#14171d';
-        badgeBorder = isWhite ? '#1e293b' : '#cbd5e1';
-        pieceFill = isWhite ? '#ffffff' : '#111827';
-        pieceStroke = isWhite ? '#0f172a' : '#f8fafc';
-        detailStroke = isWhite ? '#334155' : '#94a3b8';
+        pieceFill = isWhite ? '#ffffff' : '#1e2229';
+        pieceStroke = isWhite ? '#141619' : '#0a0c0e';
+        detailStroke = isWhite ? '#141619' : '#f1f5f9';
+        haloStroke = isWhite ? 'rgba(0, 0, 0, 0.25)' : 'rgba(255, 255, 255, 0.75)';
       }
 
-      // Outer circular badge disk
-      ctx.beginPath();
-      ctx.arc(cx, cy, 240, 0, Math.PI * 2);
-      ctx.fillStyle = badgeBg;
-      ctx.fill();
-
-      // Outer badge rim border
-      ctx.lineWidth = 14;
-      ctx.strokeStyle = badgeBorder;
-      ctx.stroke();
-
-      // Inner decorative ring
-      ctx.beginPath();
-      ctx.arc(cx, cy, 215, 0, Math.PI * 2);
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = badgeBorder;
-      ctx.globalAlpha = 0.55;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
-
-      // Draw custom vector piece silhouette
-      ctx.fillStyle = pieceFill;
-      ctx.strokeStyle = pieceStroke;
-      ctx.lineWidth = 14;
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
 
-      drawPieceVectorSilhouette(ctx, t, cx, cy);
+      // 1. For black pieces: draw light outer halo stroke first so piece separates cleanly on dark squares
+      if (!isWhite) {
+        ctx.save();
+        ctx.strokeStyle = haloStroke;
+        ctx.lineWidth = 22;
+        drawPieceVectorSilhouette(ctx, t, cx);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 2. Draw silhouette fill with soft drop shadow
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = pieceFill;
+      drawPieceVectorSilhouette(ctx, t, cx);
       ctx.fill();
+      ctx.restore();
+
+      // 3. Draw crisp outer contour stroke
+      ctx.strokeStyle = pieceStroke;
+      ctx.lineWidth = isWhite ? 16 : 15;
+      drawPieceVectorSilhouette(ctx, t, cx);
       ctx.stroke();
 
-      // Inner detail lines
-      ctx.lineWidth = 6;
+      // 4. Draw inner detail lines & features
       ctx.strokeStyle = detailStroke;
-      drawPieceInnerDetails(ctx, t, cx, cy);
+      ctx.fillStyle = detailStroke;
+      ctx.lineWidth = isWhite ? 11 : 10;
+      drawPieceInnerDetails(ctx, t, cx);
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.needsUpdate = true;
@@ -1182,7 +1243,8 @@
   }
 
   /**
-   * Procedural 2D Chess Piece Mesh Factory: Flat Token with Vector Badge on Three.js Board
+   * Procedural 2D Chess Piece Mesh Factory: Flat Transparent Plane on Three.js Board
+   * (Authentic Lichess cburnett / Chess.com Neo style - NO pucks or circles)
    */
   function createPiece2DMesh(type, color, theme) {
     const THREE = getTHREE();
@@ -1191,58 +1253,23 @@
     const th = normalizeTheme(theme);
     const group = new THREE.Group();
 
-    const isWhite = c === 'w';
-
-    // 1. Dark tournament baize felt base pad at y=0.002
-    group.add(createFeltPad(0.38));
-
-    // 2. Token puck cylinder body (y from 0.004 to 0.024)
-    const puckGeom = new THREE.CylinderGeometry(0.38, 0.38, 0.020, 32);
-    let puckColor;
-    if (th === 'neon') {
-      puckColor = isWhite ? 0x002b3d : 0x3d001f;
-    } else if (th === 'wood') {
-      puckColor = isWhite ? 0xecd8b8 : 0x2d180c;
-    } else {
-      puckColor = isWhite ? 0xf8fafc : 0x14171d;
-    }
-    const puckMat = new THREE.MeshStandardMaterial({
-      color: puckColor,
-      roughness: 0.40,
-      metalness: 0.05
-    });
-    const puckMesh = new THREE.Mesh(puckGeom, puckMat);
-    puckMesh.position.y = 0.014;
-    puckMesh.castShadow = true;
-    puckMesh.receiveShadow = true;
-    puckMesh.userData.isPuck = true;
-    group.add(puckMesh);
-
-    // 3. Contrasting outer rim ring at y=0.0245
-    const ringGeom = new THREE.RingGeometry(0.34, 0.38, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: (th === 'neon') ? (isWhite ? 0x00ffff : 0xff007f) : (isWhite ? 0x0f172a : 0xe2e8f0),
-      side: THREE.DoubleSide
-    });
-    const ringMesh = new THREE.Mesh(ringGeom, ringMat);
-    ringMesh.rotation.x = -Math.PI / 2;
-    ringMesh.position.y = 0.0245;
-    ringMesh.userData.isRing = true;
-    group.add(ringMesh);
-
-    // 4. Vector Piece Silhouette Face Texture on CircleGeometry at y=0.025
+    // Transparent plane with authentic Lichess / Chess.com vector silhouette
     const texture = get2DPieceTexture(t, c, th);
-    const faceGeom = new THREE.CircleGeometry(0.34, 32);
-    const faceMat = new THREE.MeshBasicMaterial({
+    const planeGeom = new THREE.PlaneGeometry(0.88, 0.88);
+    const planeMat = new THREE.MeshBasicMaterial({
       map: texture || null,
-      color: 0xffffff,
+      transparent: true,
+      alphaTest: 0.02,
+      depthWrite: false,
       side: THREE.DoubleSide
     });
-    const faceMesh = new THREE.Mesh(faceGeom, faceMat);
-    faceMesh.rotation.x = -Math.PI / 2;
-    faceMesh.position.y = 0.025;
-    faceMesh.userData.isFace = true;
-    group.add(faceMesh);
+    const planeMesh = new THREE.Mesh(planeGeom, planeMat);
+    planeMesh.rotation.x = -Math.PI / 2;
+    planeMesh.position.y = 0.015;
+    planeMesh.userData.isFace = true;
+    planeMesh.castShadow = false;
+    planeMesh.receiveShadow = false;
+    group.add(planeMesh);
 
     group.name = `piece_2d_${c}_${t}`;
     group.userData = {
@@ -1349,8 +1376,8 @@
       }
     });
 
-    // Add Inverted-Hull Silhouette Outline around all 3D piece meshes
-    addInvertedHullOutline(pieceGroup, c, th);
+    // Add 3D Physical Accent Trim Torus Rings
+    addInvertedHullOutline(pieceGroup, c, th, t);
 
     // Knight orientation: White faces -Z (towards Black rank 8), Black faces +Z (towards White rank 1)
     if (t === 'n' && c === 'b') {
@@ -1380,22 +1407,10 @@
     const t = normalizeType(pieceGroup.userData.type);
 
     if (pieceGroup.userData.is2D || pieceGroup.userData.mode === '2d') {
-      const isWhite = c === 'w';
       pieceGroup.traverse((node) => {
-        if (node.isMesh) {
-          if (node.userData.isPuck) {
-            let puckColor;
-            if (th === 'neon') puckColor = isWhite ? 0x002b3d : 0x3d001f;
-            else if (th === 'wood') puckColor = isWhite ? 0xecd8b8 : 0x2d180c;
-            else puckColor = isWhite ? 0xf8fafc : 0x14171d;
-            node.material.color.set(puckColor);
-          } else if (node.userData.isRing) {
-            const ringCol = (th === 'neon') ? (isWhite ? 0x00ffff : 0xff007f) : (isWhite ? 0x0f172a : 0xe2e8f0);
-            node.material.color.set(ringCol);
-          } else if (node.userData.isFace) {
-            node.material.map = get2DPieceTexture(t, c, th);
-            node.material.needsUpdate = true;
-          }
+        if (node.isMesh && node.userData.isFace) {
+          node.material.map = get2DPieceTexture(t, c, th);
+          node.material.needsUpdate = true;
         }
       });
       pieceGroup.userData.theme = th;
