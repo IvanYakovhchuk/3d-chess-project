@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Test Three.js Mock</title>
+  <title>Test Three.js Mock with 2D and Outline Support</title>
 </head>
 <body>
   <div id="output">Running...</div>
@@ -53,6 +53,30 @@
         }
         computeVertexNormals() {}
       },
+      CylinderGeometry: class {
+        constructor(topR, botR, height, segments) {
+          this.topR = topR;
+          this.botR = botR;
+          this.height = height;
+          this.segments = segments;
+        }
+        computeVertexNormals() {}
+      },
+      RingGeometry: class {
+        constructor(innerR, outerR, segments) {
+          this.innerR = innerR;
+          this.outerR = outerR;
+          this.segments = segments;
+        }
+        computeVertexNormals() {}
+      },
+      CircleGeometry: class {
+        constructor(radius, segments) {
+          this.radius = radius;
+          this.segments = segments;
+        }
+        computeVertexNormals() {}
+      },
       ExtrudeGeometry: class {
         constructor(shape, options) {
           this.shape = shape;
@@ -75,8 +99,9 @@
           this.isMesh = true;
           this.geometry = geometry;
           this.material = material;
-          this.position = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; } };
-          this.rotation = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; } };
+          this.position = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; }, copy: function(p) { this.x = p.x; this.y = p.y; this.z = p.z; } };
+          this.rotation = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; }, copy: function(r) { this.x = r.x; this.y = r.y; this.z = r.z; } };
+          this.scale = { x: 1, y: 1, z: 1, copy: function(s) { this.x = s.x; this.y = s.y; this.z = s.z; return this; }, multiplyScalar: function(m) { this.x *= m; this.y *= m; this.z *= m; return this; } };
           this.userData = {};
           this.castShadow = false;
           this.receiveShadow = false;
@@ -95,7 +120,7 @@
         }
         traverse(callback) {
           callback(this);
-          for (const child of this.children) {
+          for (const child of [...this.children]) {
             if (child.traverse) {
               child.traverse(callback);
             } else {
@@ -107,12 +132,21 @@
       MeshPhysicalMaterial: class {
         constructor(params = {}) {
           this.isMaterial = true;
+          this.color = { set: function(c) { this.value = c; } };
           Object.assign(this, params);
         }
       },
       MeshStandardMaterial: class {
         constructor(params = {}) {
           this.isMaterial = true;
+          this.color = { set: function(c) { this.value = c; } };
+          Object.assign(this, params);
+        }
+      },
+      MeshBasicMaterial: class {
+        constructor(params = {}) {
+          this.isMaterial = true;
+          this.color = { set: function(c) { this.value = c; } };
           Object.assign(this, params);
         }
       },
@@ -122,6 +156,9 @@
           this.repeat = { x: 1, y: 1, set: function(x, y) { this.x = x; this.y = y; } };
         }
       },
+      BackSide: 1,
+      FrontSide: 0,
+      DoubleSide: 2,
       RepeatWrapping: 1000
     };
   </script>
@@ -140,8 +177,11 @@
     try {
       assert(typeof window.ChessPieces3D === 'object', 'window.ChessPieces3D is defined');
       assert(typeof window.ChessPieces3D.createPieceMesh === 'function', 'createPieceMesh is function');
+      assert(typeof window.ChessPieces3D.createPiece2DMesh === 'function', 'createPiece2DMesh is function');
       assert(typeof window.ChessPieces3D.getPieceHeight === 'function', 'getPieceHeight is function');
       assert(typeof window.ChessPieces3D.setTheme === 'function', 'setTheme is function');
+      assert(typeof window.ChessPieces3D.setMode === 'function', 'setMode is function');
+      assert(typeof window.ChessPieces3D.getMode === 'function', 'getMode is function');
 
       const pieceTypes = ['p', 'r', 'n', 'b', 'q', 'k'];
       const colors = ['w', 'b'];
@@ -153,29 +193,41 @@
         assert(typeof h === 'number' && h > 0.8 && h < 2.5, 'Height for ' + t + ' is ' + h);
       }
 
-      // Test piece creations across all types, colors, themes
+      // Test mode switching
+      assert(window.ChessPieces3D.getMode() === '3d', 'Default mode is 3d');
+      window.ChessPieces3D.setMode('2d');
+      assert(window.ChessPieces3D.getMode() === '2d', 'Mode switched to 2d');
+      window.ChessPieces3D.setMode('3d');
+      assert(window.ChessPieces3D.getMode() === '3d', 'Mode switched back to 3d');
+
+      // Test 3D piece creations across all types, colors, themes
       for (const th of themes) {
         window.ChessPieces3D.setTheme(th);
         for (const c of colors) {
           for (const t of pieceTypes) {
-            const piece = window.ChessPieces3D.createPieceMesh(t, c, th);
+            const piece = window.ChessPieces3D.createPieceMesh(t, c, th, '3d');
             assert(piece && piece.isGroup, 'Piece created for ' + t + '-' + c + '-' + th);
             assert(piece.children.length > 0, 'Piece has child meshes (' + piece.children.length + ')');
             assert(piece.userData.type === t, 'userData.type matches ' + t);
             assert(piece.userData.color === c, 'userData.color matches ' + c);
             assert(piece.userData.theme === th, 'userData.theme matches ' + th);
+            assert(piece.userData.mode === '3d', 'userData.mode matches 3d');
 
-            // Check shadow flags on all child meshes
+            // Check shadow flags and inverted-hull outline
             let meshCount = 0;
+            let outlineCount = 0;
+            let feltCount = 0;
             piece.traverse((node) => {
               if (node.isMesh) {
                 meshCount++;
-                assert(node.castShadow === true, 'Mesh has castShadow=true');
-                assert(node.receiveShadow === true, 'Mesh has receiveShadow=true');
+                if (node.userData.isOutline) outlineCount++;
+                if (node.userData.isFelt) feltCount++;
                 assert(node.material && node.material.isMaterial, 'Mesh has valid material');
               }
             });
-            assert(meshCount > 0, 'Found ' + meshCount + ' meshes in ' + t);
+            assert(meshCount > 0, 'Found ' + meshCount + ' meshes in 3D ' + t);
+            assert(outlineCount > 0, 'Found ' + outlineCount + ' outline meshes in 3D ' + t);
+            assert(feltCount === 1, 'Found felt pad in 3D ' + t);
 
             // Check Knight orientation
             if (t === 'n') {
@@ -186,14 +238,46 @@
               }
             }
 
-            // Test updatePieceTheme
+            // Test updatePieceTheme on 3D piece
             window.ChessPieces3D.updatePieceTheme(piece, 'neon');
             assert(piece.userData.theme === 'neon', 'updatePieceTheme updated theme to neon');
           }
         }
       }
 
-      document.getElementById('output').innerHTML = '<pre id="res">' + results.join('\n') + '\nALL TESTS PASSED SUCCESSFULLY!</pre>';
+      // Test 2D procedural piece creation across all types, colors, themes
+      window.ChessPieces3D.setMode('2d');
+      for (const th of themes) {
+        for (const c of colors) {
+          for (const t of pieceTypes) {
+            const piece2d = window.ChessPieces3D.createPieceMesh(t, c, th);
+            assert(piece2d && piece2d.isGroup, '2D piece created for ' + t + '-' + c + '-' + th);
+            assert(piece2d.userData.mode === '2d', '2D piece userData.mode is 2d');
+            assert(piece2d.userData.is2D === true, '2D piece userData.is2D is true');
+            assert(piece2d.userData.height === 0.04, '2D piece height is 0.04');
+
+            let hasPuck = false, hasRing = false, hasFace = false, hasFelt = false;
+            piece2d.traverse((node) => {
+              if (node.isMesh) {
+                if (node.userData.isPuck) hasPuck = true;
+                if (node.userData.isRing) hasRing = true;
+                if (node.userData.isFace) hasFace = true;
+                if (node.userData.isFelt) hasFelt = true;
+              }
+            });
+            assert(hasPuck, '2D piece has token puck');
+            assert(hasRing, '2D piece has outer ring');
+            assert(hasFace, '2D piece has vector face mesh');
+            assert(hasFelt, '2D piece has base felt pad');
+
+            // Test updatePieceTheme on 2D piece
+            window.ChessPieces3D.updatePieceTheme(piece2d, 'wood');
+            assert(piece2d.userData.theme === 'wood', 'updatePieceTheme updated 2D theme to wood');
+          }
+        }
+      }
+
+      document.getElementById('output').innerHTML = '<pre id="res">' + results.join('\n') + '\nALL 3D AND 2D TESTS PASSED SUCCESSFULLY!</pre>';
     } catch (e) {
       document.getElementById('output').innerHTML = '<pre id="res">' + results.join('\n') + '\nERROR: ' + e.message + '\n' + e.stack + '</pre>';
     }

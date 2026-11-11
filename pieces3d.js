@@ -44,11 +44,15 @@
   });
 
   const THEMES = Object.freeze(['classic', 'marble', 'neon', 'wood']);
+  const MODES = Object.freeze(['3d', '2d']);
   let currentTheme = 'classic';
+  let currentMode = '3d';
 
   // Texture and material caches
   const textureCache = new Map();
+  const texture2DCache = new Map();
   const materialCache = new Map();
+  const outlineMaterialCache = new Map();
 
   /**
    * Helper: Normalize piece type to lowercase ('p', 'r', 'n', 'b', 'q', 'k')
@@ -332,6 +336,63 @@
     mesh.position.y = 0.0025;
     mesh.userData.isFelt = true;
     return mesh;
+  }
+
+  /**
+   * Outline Material Factory: Inverted-Hull Silhouette Outline (THREE.BackSide)
+   * White pieces get a crisp dark obsidian outline; Black pieces get a bright silver-white outline.
+   */
+  function getOutlineMaterial(color, theme) {
+    const THREE = getTHREE();
+    const c = normalizeColor(color);
+    const th = normalizeTheme(theme);
+    const key = `${th}_${c}`;
+    if (outlineMaterialCache.has(key)) return outlineMaterialCache.get(key);
+
+    let outlineColor;
+    if (th === 'neon') {
+      outlineColor = (c === 'w') ? 0x00ffff : 0xff007f;
+    } else {
+      // White pieces get dark obsidian contour (#111318); Black pieces get bright silver/white contour (#e2e8f0)
+      outlineColor = (c === 'w') ? 0x111318 : 0xe2e8f0;
+    }
+
+    const MaterialClass = THREE.MeshBasicMaterial || THREE.MeshStandardMaterial;
+    const mat = new MaterialClass({
+      color: outlineColor,
+      side: THREE.BackSide,
+      depthWrite: true,
+      depthTest: true
+    });
+
+    outlineMaterialCache.set(key, mat);
+    return mat;
+  }
+
+  /**
+   * Helper: Add Inverted-Hull Silhouette Outline Mesh to 3D Piece Group
+   */
+  function addInvertedHullOutline(pieceGroup, color, theme) {
+    const THREE = getTHREE();
+    const outlineMat = getOutlineMaterial(color, theme);
+    const baseMeshes = [];
+
+    pieceGroup.traverse((node) => {
+      if (node.isMesh && !node.userData.isFelt && !node.userData.isSlot && !node.userData.isOutline) {
+        baseMeshes.push(node);
+      }
+    });
+
+    for (const node of baseMeshes) {
+      const outlineMesh = new THREE.Mesh(node.geometry, outlineMat);
+      outlineMesh.position.copy(node.position);
+      outlineMesh.rotation.copy(node.rotation);
+      outlineMesh.scale.copy(node.scale).multiplyScalar(1.036);
+      outlineMesh.userData.isOutline = true;
+      outlineMesh.castShadow = false;
+      outlineMesh.receiveShadow = false;
+      pieceGroup.add(outlineMesh);
+    }
   }
 
   // =========================================================================
@@ -759,6 +820,444 @@
   }
 
   // =========================================================================
+  // 2D PROCEDURAL VECTOR CHESS PIECES (Canvas2D paths -> CanvasTexture)
+  // =========================================================================
+
+  function drawPieceVectorSilhouette(ctx, type, cx, cy) {
+    ctx.beginPath();
+    switch (type) {
+      case 'p': {
+        // Pawn: base pedestal, tapered stem, collar, spherical head
+        ctx.moveTo(cx - 85, cy + 135);
+        ctx.lineTo(cx + 85, cy + 135);
+        ctx.quadraticCurveTo(cx + 85, cy + 112, cx + 60, cy + 106);
+        ctx.quadraticCurveTo(cx + 34, cy + 55, cx + 22, cy + 12);
+        ctx.lineTo(cx + 42, cy + 8);
+        ctx.quadraticCurveTo(cx + 42, cy - 8, cx + 18, cy - 12);
+        ctx.arc(cx, cy - 65, 54, 0.45, Math.PI - 0.45, true);
+        ctx.quadraticCurveTo(cx - 42, cy - 8, cx - 42, cy + 8);
+        ctx.lineTo(cx - 22, cy + 12);
+        ctx.quadraticCurveTo(cx - 34, cy + 55, cx - 60, cy + 106);
+        ctx.quadraticCurveTo(cx - 85, cy + 112, cx - 85, cy + 135);
+        ctx.closePath();
+        break;
+      }
+
+      case 'r': {
+        // Rook: base, column, flared parapet with 3 merlons and 2 crenels
+        ctx.moveTo(cx - 90, cy + 135);
+        ctx.lineTo(cx + 90, cy + 135);
+        ctx.quadraticCurveTo(cx + 90, cy + 112, cx + 66, cy + 106);
+        ctx.lineTo(cx + 62, cy - 30);
+        ctx.lineTo(cx + 92, cy - 55);
+        // Merlon 3 (right)
+        ctx.lineTo(cx + 92, cy - 120);
+        ctx.lineTo(cx + 54, cy - 120);
+        ctx.lineTo(cx + 54, cy - 80);
+        // Crenel 2
+        ctx.lineTo(cx + 24, cy - 80);
+        // Merlon 2 (center)
+        ctx.lineTo(cx + 24, cy - 120);
+        ctx.lineTo(cx - 24, cy - 120);
+        ctx.lineTo(cx - 24, cy - 80);
+        // Crenel 1
+        ctx.lineTo(cx - 54, cy - 80);
+        // Merlon 1 (left)
+        ctx.lineTo(cx - 54, cy - 120);
+        ctx.lineTo(cx - 92, cy - 120);
+        ctx.lineTo(cx - 92, cy - 55);
+        ctx.lineTo(cx - 62, cy - 30);
+        ctx.lineTo(cx - 66, cy + 106);
+        ctx.quadraticCurveTo(cx - 90, cy + 112, cx - 90, cy + 135);
+        ctx.closePath();
+        break;
+      }
+
+      case 'n': {
+        // Knight: arched neck, ears, brow, snout, jaw, chest
+        ctx.moveTo(cx - 80, cy + 135);
+        ctx.lineTo(cx + 80, cy + 135);
+        ctx.quadraticCurveTo(cx + 80, cy + 112, cx + 60, cy + 106);
+        ctx.quadraticCurveTo(cx + 85, cy + 30, cx + 75, cy - 30);
+        ctx.quadraticCurveTo(cx + 58, cy - 85, cx + 16, cy - 118);
+        // Right ear
+        ctx.lineTo(cx + 26, cy - 148);
+        ctx.lineTo(cx + 6, cy - 128);
+        // Left ear
+        ctx.lineTo(cx - 4, cy - 148);
+        ctx.lineTo(cx - 18, cy - 118);
+        // Forehead & muzzle
+        ctx.quadraticCurveTo(cx - 55, cy - 88, cx - 80, cy - 45);
+        ctx.lineTo(cx - 106, cy - 15);
+        // Snout & mouth
+        ctx.quadraticCurveTo(cx - 100, cy + 10, cx - 80, cy + 10);
+        ctx.lineTo(cx - 65, cy + 15);
+        ctx.lineTo(cx - 60, cy + 5);
+        // Under-jaw & throat
+        ctx.quadraticCurveTo(cx - 35, cy + 30, cx - 24, cy + 55);
+        // Chest swell
+        ctx.quadraticCurveTo(cx - 55, cy + 85, cx - 60, cy + 106);
+        ctx.quadraticCurveTo(cx - 80, cy + 112, cx - 80, cy + 135);
+        ctx.closePath();
+        break;
+      }
+
+      case 'b': {
+        // Bishop: base, stem, double collar, teardrop mitre
+        ctx.moveTo(cx - 85, cy + 135);
+        ctx.lineTo(cx + 85, cy + 135);
+        ctx.quadraticCurveTo(cx + 85, cy + 112, cx + 60, cy + 106);
+        ctx.quadraticCurveTo(cx + 34, cy + 65, cx + 24, cy + 40);
+        ctx.lineTo(cx + 44, cy + 35);
+        ctx.quadraticCurveTo(cx + 44, cy + 18, cx + 18, cy + 14);
+        // Mitre bulb
+        ctx.quadraticCurveTo(cx + 68, cy - 25, cx + 54, cy - 75);
+        ctx.quadraticCurveTo(cx + 32, cy - 120, cx, cy - 135);
+        ctx.quadraticCurveTo(cx - 32, cy - 120, cx - 54, cy - 75);
+        ctx.quadraticCurveTo(cx - 68, cy - 25, cx - 18, cy + 14);
+        ctx.lineTo(cx - 44, cy + 18);
+        ctx.quadraticCurveTo(cx - 44, cy + 35, cx - 24, cy + 40);
+        ctx.quadraticCurveTo(cx - 34, cy + 65, cx - 60, cy + 106);
+        ctx.quadraticCurveTo(cx - 85, cy + 112, cx - 85, cy + 135);
+        ctx.closePath();
+        break;
+      }
+
+      case 'q': {
+        // Queen: base, stem, collar, 5-point coronet crown
+        ctx.moveTo(cx - 95, cy + 135);
+        ctx.lineTo(cx + 95, cy + 135);
+        ctx.quadraticCurveTo(cx + 95, cy + 112, cx + 70, cy + 106);
+        ctx.quadraticCurveTo(cx + 40, cy + 65, cx + 28, cy + 40);
+        ctx.lineTo(cx + 52, cy + 35);
+        ctx.lineTo(cx + 42, cy + 20);
+        // 5 Coronet spikes
+        ctx.lineTo(cx + 84, cy - 40);
+        ctx.lineTo(cx + 94, cy - 80);
+        ctx.lineTo(cx + 64, cy - 50);
+        ctx.lineTo(cx + 48, cy - 105);
+        ctx.lineTo(cx + 24, cy - 55);
+        ctx.lineTo(cx, cy - 120); // center
+        ctx.lineTo(cx - 24, cy - 55);
+        ctx.lineTo(cx - 48, cy - 105);
+        ctx.lineTo(cx - 64, cy - 50);
+        ctx.lineTo(cx - 94, cy - 80);
+        ctx.lineTo(cx - 84, cy - 40);
+        ctx.lineTo(cx - 42, cy + 20);
+        ctx.lineTo(cx - 52, cy + 35);
+        ctx.lineTo(cx - 28, cy + 40);
+        ctx.quadraticCurveTo(cx - 40, cy + 65, cx - 70, cy + 106);
+        ctx.quadraticCurveTo(cx - 95, cy + 112, cx - 95, cy + 135);
+        ctx.closePath();
+        break;
+      }
+
+      case 'k': {
+        // King: base, column, gallery, crown dome & Cross Pattée
+        ctx.moveTo(cx - 100, cy + 135);
+        ctx.lineTo(cx + 100, cy + 135);
+        ctx.quadraticCurveTo(cx + 100, cy + 112, cx + 75, cy + 106);
+        ctx.quadraticCurveTo(cx + 45, cy + 65, cx + 34, cy + 40);
+        ctx.lineTo(cx + 58, cy + 35);
+        ctx.lineTo(cx + 48, cy + 20);
+        // Cupola dome
+        ctx.quadraticCurveTo(cx + 88, cy - 10, cx + 78, cy - 65);
+        ctx.quadraticCurveTo(cx + 48, cy - 95, cx + 18, cy - 100);
+        // Cross finial
+        ctx.lineTo(cx + 34, cy - 100);
+        ctx.lineTo(cx + 34, cy - 122);
+        ctx.lineTo(cx + 14, cy - 122);
+        ctx.lineTo(cx + 14, cy - 154);
+        ctx.lineTo(cx - 14, cy - 154);
+        ctx.lineTo(cx - 14, cy - 122);
+        ctx.lineTo(cx - 34, cy - 122);
+        ctx.lineTo(cx - 34, cy - 100);
+        ctx.lineTo(cx - 18, cy - 100);
+        // Left cupola dome
+        ctx.quadraticCurveTo(cx - 48, cy - 95, cx - 78, cy - 65);
+        ctx.quadraticCurveTo(cx - 88, cy - 10, cx - 48, cy + 20);
+        ctx.lineTo(cx - 58, cy + 35);
+        ctx.lineTo(cx - 34, cy + 40);
+        ctx.quadraticCurveTo(cx - 45, cy + 65, cx - 75, cy + 106);
+        ctx.quadraticCurveTo(cx - 100, cy + 112, cx - 100, cy + 135);
+        ctx.closePath();
+        break;
+      }
+    }
+  }
+
+  function drawPieceInnerDetails(ctx, type, cx, cy) {
+    ctx.beginPath();
+    switch (type) {
+      case 'p': {
+        // Base ring line & collar line
+        ctx.moveTo(cx - 55, cy + 118);
+        ctx.lineTo(cx + 55, cy + 118);
+        ctx.moveTo(cx - 32, cy + 8);
+        ctx.lineTo(cx + 32, cy + 8);
+        ctx.stroke();
+        break;
+      }
+
+      case 'r': {
+        // Cornice shelf line & base ring
+        ctx.moveTo(cx - 58, cy + 118);
+        ctx.lineTo(cx + 58, cy + 118);
+        ctx.moveTo(cx - 65, cy - 48);
+        ctx.lineTo(cx + 65, cy - 48);
+        // Arrow slit window in tower center
+        ctx.moveTo(cx, cy - 15);
+        ctx.lineTo(cx, cy + 45);
+        ctx.stroke();
+        break;
+      }
+
+      case 'n': {
+        // Eye
+        ctx.beginPath();
+        ctx.arc(cx - 42, cy - 52, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // Nostril
+        ctx.beginPath();
+        ctx.arc(cx - 86, cy - 6, 4, 0, Math.PI * 2);
+        ctx.fill();
+        // Mane ridge curves
+        ctx.beginPath();
+        ctx.moveTo(cx + 35, cy - 80);
+        ctx.quadraticCurveTo(cx + 15, cy - 60, cx + 30, cy - 35);
+        ctx.moveTo(cx + 50, cy - 45);
+        ctx.quadraticCurveTo(cx + 25, cy - 20, cx + 45, cy + 5);
+        ctx.moveTo(cx + 55, cy - 5);
+        ctx.quadraticCurveTo(cx + 30, cy + 20, cx + 45, cy + 50);
+        ctx.stroke();
+        break;
+      }
+
+      case 'b': {
+        // Base line & collar line
+        ctx.moveTo(cx - 55, cy + 118);
+        ctx.lineTo(cx + 55, cy + 118);
+        ctx.moveTo(cx - 35, cy + 28);
+        ctx.lineTo(cx + 35, cy + 28);
+        // Iconic diagonal slash slot
+        ctx.moveTo(cx + 36, cy - 90);
+        ctx.lineTo(cx - 12, cy - 42);
+        ctx.stroke();
+        // Finial orb atop mitre
+        ctx.beginPath();
+        ctx.arc(cx, cy - 148, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      }
+
+      case 'q': {
+        // Base line & waist line
+        ctx.moveTo(cx - 65, cy + 118);
+        ctx.lineTo(cx + 65, cy + 118);
+        ctx.moveTo(cx - 40, cy + 28);
+        ctx.lineTo(cx + 40, cy + 28);
+        ctx.stroke();
+        // Pearls on crown spikes
+        const pearlPts = [
+          [cx, cy - 132],
+          [cx - 48, cy - 117], [cx + 48, cy - 117],
+          [cx - 94, cy - 92],  [cx + 94, cy - 92]
+        ];
+        for (const [px, py] of pearlPts) {
+          ctx.beginPath();
+          ctx.arc(px, py, 11, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        break;
+      }
+
+      case 'k': {
+        // Base line & collar line
+        ctx.moveTo(cx - 70, cy + 118);
+        ctx.lineTo(cx + 70, cy + 118);
+        ctx.moveTo(cx - 45, cy + 28);
+        ctx.lineTo(cx + 45, cy + 28);
+        // Cupola headband
+        ctx.moveTo(cx - 55, cy - 25);
+        ctx.lineTo(cx + 55, cy - 25);
+        ctx.stroke();
+        break;
+      }
+    }
+  }
+
+  /**
+   * Procedural Canvas Texture Factory for 2D Piece Vector Badges
+   */
+  function get2DPieceTexture(type, color, theme) {
+    const t = normalizeType(type);
+    const c = normalizeColor(color);
+    const th = normalizeTheme(theme);
+    const key = `2d_${th}_${c}_${t}`;
+    if (texture2DCache.has(key)) return texture2DCache.get(key);
+
+    if (typeof document === 'undefined') return null;
+
+    try {
+      const THREE = getTHREE();
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      const isWhite = c === 'w';
+      const cx = 256;
+      const cy = 256;
+
+      ctx.clearRect(0, 0, 512, 512);
+
+      let badgeBg, badgeBorder, pieceFill, pieceStroke, detailStroke;
+      if (th === 'neon') {
+        badgeBg = isWhite ? '#002533' : '#33001a';
+        badgeBorder = isWhite ? '#00ffff' : '#ff007f';
+        pieceFill = isWhite ? '#00ffff' : '#ff007f';
+        pieceStroke = '#ffffff';
+        detailStroke = isWhite ? '#003344' : '#440022';
+      } else if (th === 'wood') {
+        badgeBg = isWhite ? '#ecd8b8' : '#2d180c';
+        badgeBorder = isWhite ? '#5c3a21' : '#cca072';
+        pieceFill = isWhite ? '#fcf6ec' : '#1a0d06';
+        pieceStroke = isWhite ? '#3d2516' : '#ecd8b8';
+        detailStroke = isWhite ? '#8c5932' : '#dcb487';
+      } else {
+        // 'classic' & 'marble'
+        badgeBg = isWhite ? '#f8fafc' : '#14171d';
+        badgeBorder = isWhite ? '#1e293b' : '#cbd5e1';
+        pieceFill = isWhite ? '#ffffff' : '#111827';
+        pieceStroke = isWhite ? '#0f172a' : '#f8fafc';
+        detailStroke = isWhite ? '#334155' : '#94a3b8';
+      }
+
+      // Outer circular badge disk
+      ctx.beginPath();
+      ctx.arc(cx, cy, 240, 0, Math.PI * 2);
+      ctx.fillStyle = badgeBg;
+      ctx.fill();
+
+      // Outer badge rim border
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = badgeBorder;
+      ctx.stroke();
+
+      // Inner decorative ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, 215, 0, Math.PI * 2);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = badgeBorder;
+      ctx.globalAlpha = 0.55;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      // Draw custom vector piece silhouette
+      ctx.fillStyle = pieceFill;
+      ctx.strokeStyle = pieceStroke;
+      ctx.lineWidth = 14;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+
+      drawPieceVectorSilhouette(ctx, t, cx, cy);
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner detail lines
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = detailStroke;
+      drawPieceInnerDetails(ctx, t, cx, cy);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      texture2DCache.set(key, texture);
+      return texture;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Procedural 2D Chess Piece Mesh Factory: Flat Token with Vector Badge on Three.js Board
+   */
+  function createPiece2DMesh(type, color, theme) {
+    const THREE = getTHREE();
+    const t = normalizeType(type);
+    const c = normalizeColor(color);
+    const th = normalizeTheme(theme);
+    const group = new THREE.Group();
+
+    const isWhite = c === 'w';
+
+    // 1. Dark tournament baize felt base pad at y=0.002
+    group.add(createFeltPad(0.38));
+
+    // 2. Token puck cylinder body (y from 0.004 to 0.024)
+    const puckGeom = new THREE.CylinderGeometry(0.38, 0.38, 0.020, 32);
+    let puckColor;
+    if (th === 'neon') {
+      puckColor = isWhite ? 0x002b3d : 0x3d001f;
+    } else if (th === 'wood') {
+      puckColor = isWhite ? 0xecd8b8 : 0x2d180c;
+    } else {
+      puckColor = isWhite ? 0xf8fafc : 0x14171d;
+    }
+    const puckMat = new THREE.MeshStandardMaterial({
+      color: puckColor,
+      roughness: 0.40,
+      metalness: 0.05
+    });
+    const puckMesh = new THREE.Mesh(puckGeom, puckMat);
+    puckMesh.position.y = 0.014;
+    puckMesh.castShadow = true;
+    puckMesh.receiveShadow = true;
+    puckMesh.userData.isPuck = true;
+    group.add(puckMesh);
+
+    // 3. Contrasting outer rim ring at y=0.0245
+    const ringGeom = new THREE.RingGeometry(0.34, 0.38, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: (th === 'neon') ? (isWhite ? 0x00ffff : 0xff007f) : (isWhite ? 0x0f172a : 0xe2e8f0),
+      side: THREE.DoubleSide
+    });
+    const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+    ringMesh.rotation.x = -Math.PI / 2;
+    ringMesh.position.y = 0.0245;
+    ringMesh.userData.isRing = true;
+    group.add(ringMesh);
+
+    // 4. Vector Piece Silhouette Face Texture on CircleGeometry at y=0.025
+    const texture = get2DPieceTexture(t, c, th);
+    const faceGeom = new THREE.CircleGeometry(0.34, 32);
+    const faceMat = new THREE.MeshBasicMaterial({
+      map: texture || null,
+      color: 0xffffff,
+      side: THREE.DoubleSide
+    });
+    const faceMesh = new THREE.Mesh(faceGeom, faceMat);
+    faceMesh.rotation.x = -Math.PI / 2;
+    faceMesh.position.y = 0.025;
+    faceMesh.userData.isFace = true;
+    group.add(faceMesh);
+
+    group.name = `piece_2d_${c}_${t}`;
+    group.userData = {
+      type: t,
+      color: c,
+      theme: th,
+      mode: '2d',
+      is2D: true,
+      height: 0.04
+    };
+
+    return group;
+  }
+
+  // =========================================================================
   // PUBLIC API
   // =========================================================================
 
@@ -793,14 +1292,37 @@
   }
 
   /**
-   * Create procedural 3D chess piece Mesh/Group
+   * Set display mode ('3d' or '2d')
+   */
+  function setMode(mode) {
+    if (mode === '2d' || mode === '3d') {
+      currentMode = mode;
+    }
+    return currentMode;
+  }
+
+  /**
+   * Get current display mode ('3d' or '2d')
+   */
+  function getMode() {
+    return currentMode;
+  }
+
+  /**
+   * Create procedural chess piece Mesh/Group in current mode (or specified mode)
    * 
    * @param {string} type - 'p'|'r'|'n'|'b'|'q'|'k'
    * @param {string} color - 'w'|'b'
-   * @param {string} [theme] - 'classic'|'marble'|'neon'|'wood' (optional, defaults to active theme)
-   * @returns {THREE.Group} - 3D Piece Group with castShadow/receiveShadow enabled
+   * @param {string} [theme] - 'classic'|'marble'|'neon'|'wood' (optional)
+   * @param {string} [mode] - '3d'|'2d' (optional, defaults to currentMode)
+   * @returns {THREE.Group} - 3D or 2D Piece Group
    */
-  function createPieceMesh(type, color, theme) {
+  function createPieceMesh(type, color, theme, mode) {
+    const m = mode || currentMode;
+    if (m === '2d') {
+      return createPiece2DMesh(type, color, theme);
+    }
+
     const THREE = getTHREE();
     const t = normalizeType(type);
     const c = normalizeColor(color);
@@ -809,7 +1331,7 @@
     const builder = GEOMETRY_BUILDERS[t] || GEOMETRY_BUILDERS.p;
     const pieceGroup = builder();
 
-    // Assign material and shadow flags to all meshes
+    // Assign material and shadow flags to all base meshes
     const material = getMaterial(c, th);
     const slotMaterial = (t === 'b') ? getSlotMaterial(material, th, c) : null;
 
@@ -827,6 +1349,9 @@
       }
     });
 
+    // Add Inverted-Hull Silhouette Outline around all 3D piece meshes
+    addInvertedHullOutline(pieceGroup, c, th);
+
     // Knight orientation: White faces -Z (towards Black rank 8), Black faces +Z (towards White rank 1)
     if (t === 'n' && c === 'b') {
       pieceGroup.rotation.y = Math.PI;
@@ -838,6 +1363,7 @@
       type: t,
       color: c,
       theme: th,
+      mode: '3d',
       height: getPieceHeight(t)
     };
 
@@ -853,12 +1379,39 @@
     const c = normalizeColor(pieceGroup.userData.color);
     const t = normalizeType(pieceGroup.userData.type);
 
+    if (pieceGroup.userData.is2D || pieceGroup.userData.mode === '2d') {
+      const isWhite = c === 'w';
+      pieceGroup.traverse((node) => {
+        if (node.isMesh) {
+          if (node.userData.isPuck) {
+            let puckColor;
+            if (th === 'neon') puckColor = isWhite ? 0x002b3d : 0x3d001f;
+            else if (th === 'wood') puckColor = isWhite ? 0xecd8b8 : 0x2d180c;
+            else puckColor = isWhite ? 0xf8fafc : 0x14171d;
+            node.material.color.set(puckColor);
+          } else if (node.userData.isRing) {
+            const ringCol = (th === 'neon') ? (isWhite ? 0x00ffff : 0xff007f) : (isWhite ? 0x0f172a : 0xe2e8f0);
+            node.material.color.set(ringCol);
+          } else if (node.userData.isFace) {
+            node.material.map = get2DPieceTexture(t, c, th);
+            node.material.needsUpdate = true;
+          }
+        }
+      });
+      pieceGroup.userData.theme = th;
+      return pieceGroup;
+    }
+
+    // 3D piece theme update
     const material = getMaterial(c, th);
+    const outlineMaterial = getOutlineMaterial(c, th);
     const slotMaterial = (t === 'b') ? getSlotMaterial(material, th, c) : null;
 
     pieceGroup.traverse((node) => {
       if (node.isMesh) {
-        if (node.userData.isFelt) {
+        if (node.userData.isOutline) {
+          node.material = outlineMaterial;
+        } else if (node.userData.isFelt) {
           node.material = getFeltMaterial();
         } else if (node.userData.isSlot && slotMaterial) {
           node.material = slotMaterial;
@@ -881,6 +1434,11 @@
     });
     materialCache.clear();
 
+    outlineMaterialCache.forEach((mat) => {
+      if (mat.dispose) mat.dispose();
+    });
+    outlineMaterialCache.clear();
+
     if (feltMaterialCache && feltMaterialCache.dispose) {
       feltMaterialCache.dispose();
       feltMaterialCache = null;
@@ -890,18 +1448,28 @@
       if (tex.dispose) tex.dispose();
     });
     textureCache.clear();
+
+    texture2DCache.forEach((tex) => {
+      if (tex.dispose) tex.dispose();
+    });
+    texture2DCache.clear();
   }
 
   return {
     createPieceMesh,
+    createPiece2DMesh,
     getPieceHeight,
     setTheme,
     getTheme,
     getThemes,
+    setMode,
+    getMode,
     getMaterial,
+    getOutlineMaterial,
     updatePieceTheme,
     clearCache,
     PIECE_HEIGHTS,
-    THEMES
+    THEMES,
+    MODES
   };
 });

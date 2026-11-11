@@ -280,6 +280,7 @@
       this.pendingPromotion = null;
       this.autoFlip = false;
       this.currentTheme = 'classic';
+      this.viewMode = '3d';
 
       // Timers & Clocks
       this.timeControl = 0; // 0 = unlimited, or seconds (e.g. 300, 600, 900)
@@ -314,6 +315,12 @@
       this.dom.iconSoundOff = document.getElementById('icon-sound-off');
       this.dom.btnSidebarToggle = document.getElementById('btn-sidebar-toggle');
       this.dom.gameSidebar = document.getElementById('game-sidebar');
+
+      // 3D / 2D Mode Switcher
+      this.dom.btnMode3D = document.getElementById('btn-mode-3d');
+      this.dom.btnMode2D = document.getElementById('btn-mode-2d');
+      this.dom.quickModeToggle = document.getElementById('quick-mode-toggle');
+      this.dom.activeModeBadge = document.getElementById('active-mode-badge');
 
       this.dom.playerCardW = document.getElementById('player-card-w');
       this.dom.playerCardB = document.getElementById('player-card-b');
@@ -378,6 +385,9 @@
         if (this.scene.setTheme) {
           this.scene.setTheme(this.currentTheme);
         }
+        if (this.scene.setViewMode && this.viewMode !== '3d') {
+          this.scene.setViewMode(this.viewMode);
+        }
         if (this.scene.setTurn && this.engine) {
           this.scene.setTurn(this.engine.getTurn());
         }
@@ -409,6 +419,17 @@
         this.dom.btnSidebarToggle.addEventListener('click', () => {
           this.dom.gameSidebar.classList.toggle('open');
         });
+      }
+
+      // 3D / 2D Mode Switcher
+      if (this.dom.btnMode3D) {
+        this.dom.btnMode3D.addEventListener('click', () => this.setViewMode('3d'));
+      }
+      if (this.dom.btnMode2D) {
+        this.dom.btnMode2D.addEventListener('click', () => this.setViewMode('2d'));
+      }
+      if (this.dom.quickModeToggle) {
+        this.dom.quickModeToggle.addEventListener('click', () => this.toggleViewMode());
       }
 
       // Theme selector
@@ -487,6 +508,10 @@
         // 'f' for Flip
         if (e.key === 'f' || e.key === 'F') {
           this.flipCamera();
+        }
+        // 'v' for Toggle 3D / 2D View Mode
+        if (e.key === 'v' || e.key === 'V') {
+          this.toggleViewMode();
         }
         // 'Escape' closes modals
         if (e.key === 'Escape') {
@@ -916,6 +941,38 @@
         window.ChessPieces3D.setTheme(themeName);
       }
       this.showToast(`Theme: ${themeName.charAt(0).toUpperCase() + themeName.slice(1)}`);
+    }
+
+    /**
+     * Switchable 3D <-> 2D Mode at any moment during the game
+     * @param {'3d'|'2d'} mode 
+     */
+    setViewMode(mode) {
+      if (mode !== '2d' && mode !== '3d') mode = '3d';
+      this.viewMode = mode;
+
+      if (this.dom.btnMode3D) {
+        this.dom.btnMode3D.classList.toggle('active', mode === '3d');
+      }
+      if (this.dom.btnMode2D) {
+        this.dom.btnMode2D.classList.toggle('active', mode === '2d');
+      }
+      if (this.dom.quickModeToggle) {
+        this.dom.quickModeToggle.textContent = mode === '3d' ? '2D View' : '3D View';
+      }
+      if (this.dom.activeModeBadge) {
+        this.dom.activeModeBadge.textContent = mode === '3d' ? '3D Mode' : '2D Mode';
+      }
+
+      if (this.scene && typeof this.scene.setViewMode === 'function') {
+        this.scene.setViewMode(mode);
+      }
+
+      this.showToast(mode === '2d' ? 'Switched to 2D Top-Down View' : 'Switched to 3D Perspective');
+    }
+
+    toggleViewMode() {
+      this.setViewMode(this.viewMode === '3d' ? '2d' : '3d');
     }
 
     setCameraView(viewName) {

@@ -36,7 +36,10 @@ def verify_scene3d():
         "onResize",
         "destroy",
         "setTurn",
-        "getPieceAtSquare"
+        "getPieceAtSquare",
+        "setViewMode",
+        "getViewMode",
+        "toggleViewMode"
     ]
     for method in required_methods:
         assert re.search(rf"\b{method}\s*\(", content), f"Missing method {method}() in scene3d.js"

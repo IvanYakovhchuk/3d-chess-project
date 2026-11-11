@@ -340,6 +340,251 @@
     return group;
   }
 
+  // Fallback Procedural 2D Chess Piece Mesh Generator
+  function createFallbackPiece2DMesh(type, color, theme) {
+    const group = new THREE.Group();
+    group.name = `piece_2d_${color}_${type}`;
+
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    const isWhite = color === 'w';
+    let badgeBg, badgeBorder, symbolFill, symbolStroke, detailStroke;
+
+    if (theme === 'neon') {
+      badgeBg = isWhite ? '#003344' : '#440033';
+      badgeBorder = isWhite ? '#00f0ff' : '#ff007f';
+      symbolFill = isWhite ? '#00f0ff' : '#ff007f';
+      symbolStroke = '#ffffff';
+      detailStroke = '#000000';
+    } else if (theme === 'wood') {
+      badgeBg = isWhite ? '#deb887' : '#3b2315';
+      badgeBorder = isWhite ? '#6d4c2d' : '#dec59b';
+      symbolFill = isWhite ? '#fff8ee' : '#1d120a';
+      symbolStroke = isWhite ? '#3d2516' : '#dec59b';
+      detailStroke = isWhite ? '#3d2516' : '#dec59b';
+    } else {
+      // Classic & Marble: High contrast tokens
+      badgeBg = isWhite ? '#ffffff' : '#181b22';
+      badgeBorder = isWhite ? '#0f172a' : '#e2e8f0';
+      symbolFill = isWhite ? '#ffffff' : '#1e293b';
+      symbolStroke = isWhite ? '#0f172a' : '#f8fafc';
+      detailStroke = isWhite ? '#0f172a' : '#f8fafc';
+    }
+
+    // Draw circular token badge
+    ctx.clearRect(0, 0, size, size);
+
+    // Subtle drop shadow under token
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 8;
+
+    ctx.beginPath();
+    ctx.arc(256, 256, 220, 0, Math.PI * 2);
+    ctx.fillStyle = badgeBg;
+    ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = badgeBorder;
+    ctx.stroke();
+
+    // Inner contrasting accent ring
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = isWhite ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.arc(256, 256, 206, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw vector piece silhouette inside token
+    ctx.fillStyle = symbolFill;
+    ctx.strokeStyle = symbolStroke;
+    ctx.lineWidth = 12;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    ctx.save();
+    ctx.translate(256, 256);
+
+    if (type === 'p') {
+      // Pawn
+      ctx.beginPath();
+      ctx.arc(0, -65, 48, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-25, -15);
+      ctx.quadraticCurveTo(-15, 30, -55, 80);
+      ctx.lineTo(55, 80);
+      ctx.quadraticCurveTo(15, 30, 25, -15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (type === 'r') {
+      // Rook
+      ctx.beginPath();
+      ctx.moveTo(-65, -75);
+      ctx.lineTo(-65, -35);
+      ctx.lineTo(-45, -35);
+      ctx.lineTo(-45, -55);
+      ctx.lineTo(-20, -55);
+      ctx.lineTo(-20, -35);
+      ctx.lineTo(20, -35);
+      ctx.lineTo(20, -55);
+      ctx.lineTo(45, -55);
+      ctx.lineTo(45, -35);
+      ctx.lineTo(65, -35);
+      ctx.lineTo(65, -75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-50, -35);
+      ctx.lineTo(-40, 50);
+      ctx.lineTo(-70, 80);
+      ctx.lineTo(70, 80);
+      ctx.lineTo(40, 50);
+      ctx.lineTo(50, -35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (type === 'n') {
+      // Knight
+      ctx.beginPath();
+      ctx.moveTo(-60, 80);
+      ctx.lineTo(65, 80);
+      ctx.lineTo(45, 50);
+      ctx.quadraticCurveTo(55, 0, 35, -50);
+      ctx.lineTo(15, -75);
+      ctx.lineTo(-5, -60);
+      ctx.lineTo(-35, -45);
+      ctx.quadraticCurveTo(-75, -20, -70, 10);
+      ctx.lineTo(-40, 15);
+      ctx.quadraticCurveTo(-50, 45, -60, 80);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Eye
+      ctx.fillStyle = detailStroke;
+      ctx.beginPath();
+      ctx.arc(-20, -20, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'b') {
+      // Bishop
+      ctx.beginPath();
+      ctx.arc(0, -78, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, -60);
+      ctx.bezierCurveTo(50, -40, 50, 20, 20, 45);
+      ctx.lineTo(55, 80);
+      ctx.lineTo(-55, 80);
+      ctx.lineTo(-20, 45);
+      ctx.bezierCurveTo(-50, 20, -50, -40, 0, -60);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Mitre slash
+      ctx.beginPath();
+      ctx.moveTo(-15, -30);
+      ctx.lineTo(25, 5);
+      ctx.strokeStyle = detailStroke;
+      ctx.lineWidth = 8;
+      ctx.stroke();
+    } else if (type === 'q') {
+      // Queen
+      ctx.beginPath();
+      ctx.moveTo(-70, -30);
+      ctx.lineTo(-50, -60);
+      ctx.lineTo(-30, -30);
+      ctx.lineTo(0, -75);
+      ctx.lineTo(30, -30);
+      ctx.lineTo(50, -60);
+      ctx.lineTo(70, -30);
+      ctx.quadraticCurveTo(45, 20, 65, 80);
+      ctx.lineTo(-65, 80);
+      ctx.quadraticCurveTo(-45, 20, -70, -30);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Crown pearls
+      const pearls = [-50, 0, 50];
+      ctx.fillStyle = detailStroke;
+      pearls.forEach(x => {
+        ctx.beginPath();
+        ctx.arc(x, x === 0 ? -75 : -60, 8, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    } else if (type === 'k') {
+      // King
+      // Cross
+      ctx.beginPath();
+      ctx.moveTo(0, -88);
+      ctx.lineTo(0, -58);
+      ctx.moveTo(-15, -73);
+      ctx.lineTo(15, -73);
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      // Crown
+      ctx.lineWidth = 12;
+      ctx.beginPath();
+      ctx.moveTo(-65, -45);
+      ctx.lineTo(-45, -20);
+      ctx.lineTo(0, -45);
+      ctx.lineTo(45, -20);
+      ctx.lineTo(65, -45);
+      ctx.quadraticCurveTo(40, 20, 65, 80);
+      ctx.lineTo(-65, 80);
+      ctx.quadraticCurveTo(-40, 20, -65, -45);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+
+    const planeGeo = new THREE.PlaneGeometry(0.86, 0.86);
+    const planeMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1
+    });
+
+    const mesh = new THREE.Mesh(planeGeo, planeMat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.02;
+    group.add(mesh);
+
+    group.userData = {
+      type: type,
+      color: color,
+      theme: theme,
+      mode: '2d',
+      is2D: true,
+      height: 0.04
+    };
+
+    return group;
+  }
+
   /**
    * Main ChessScene3D Class
    */
@@ -363,6 +608,7 @@
 
       // Config & State
       this.theme = 'classic';
+      this.viewMode = '3d'; // '3d' | '2d'
       this.turn = 'w';
       this.isFlipped = false;
       this.squareSize = 1.0;
@@ -913,8 +1159,21 @@
      * Instantiates a piece mesh using window.ChessPieces3D or fallback
      */
     createPieceMesh(type, color) {
+      if (this.viewMode === '2d') {
+        if (window.ChessPieces3D && typeof window.ChessPieces3D.createPiece2DMesh === 'function') {
+          const mesh = window.ChessPieces3D.createPiece2DMesh(type, color, this.theme);
+          if (mesh) return mesh;
+        }
+        if (window.ChessPieces3D && typeof window.ChessPieces3D.createPieceMesh === 'function') {
+          const mesh = window.ChessPieces3D.createPieceMesh(type, color, this.theme, '2d');
+          if (mesh) return mesh;
+        }
+        return createFallbackPiece2DMesh(type, color, this.theme);
+      }
+
+      // 3D Mode
       if (window.ChessPieces3D && typeof window.ChessPieces3D.createPieceMesh === 'function') {
-        const mesh = window.ChessPieces3D.createPieceMesh(type, color, this.theme);
+        const mesh = window.ChessPieces3D.createPieceMesh(type, color, this.theme, '3d');
         if (mesh) {
           mesh.castShadow = true;
           mesh.receiveShadow = true;
@@ -1046,10 +1305,14 @@
         if (animatedSquares.has(sq)) continue;
 
         const existing = this.pieceMap.get(sq);
+        const yPos = this.viewMode === '2d' ? 0.02 : 0;
         if (existing && existing.type === target.type && existing.color === target.color) {
           // Exactly matches, verify position
           const worldPos = squareToWorld(sq);
-          existing.mesh.position.set(worldPos.x, 0, worldPos.z);
+          existing.mesh.position.set(worldPos.x, yPos, worldPos.z);
+          if (this.viewMode === '2d') {
+            existing.mesh.rotation.y = this.isFlipped ? Math.PI : 0;
+          }
         } else {
           // Replace or create piece
           if (existing) {
@@ -1060,8 +1323,13 @@
 
           const newMesh = this.createPieceMesh(target.type, target.color);
           const worldPos = squareToWorld(sq);
-          newMesh.position.set(worldPos.x, 0, worldPos.z);
-          newMesh.userData = { square: sq, type: target.type, color: target.color };
+          newMesh.position.set(worldPos.x, yPos, worldPos.z);
+          if (this.viewMode === '2d') {
+            newMesh.rotation.y = this.isFlipped ? Math.PI : 0;
+          } else if (target.type === 'n' && target.color === 'b') {
+            newMesh.rotation.y = Math.PI;
+          }
+          newMesh.userData = { square: sq, type: target.type, color: target.color, mode: this.viewMode };
 
           this.piecesGroup.add(newMesh);
           this.pieceMap.set(sq, {
@@ -1097,7 +1365,9 @@
           mesh.position.x = fromPos.x + (toPos.x - fromPos.x) * easeT;
           mesh.position.z = fromPos.z + (toPos.z - fromPos.z) * easeT;
 
-          if (isKnight) {
+          if (this.viewMode === '2d') {
+            mesh.position.y = 0.02;
+          } else if (isKnight) {
             // Parabolic jump arc: 4 * h * t * (1 - t)
             mesh.position.y = 4 * arcHeight * t * (1 - t);
             mesh.rotation.x = Math.sin((t - 0.5) * Math.PI) * 0.15;
@@ -1107,8 +1377,10 @@
           }
 
           if (t >= 1.0) {
-            mesh.position.copy(toPos);
-            if (isKnight) mesh.rotation.x = 0;
+            mesh.position.x = toPos.x;
+            mesh.position.z = toPos.z;
+            mesh.position.y = this.viewMode === '2d' ? 0.02 : 0;
+            if (isKnight && this.viewMode !== '2d') mesh.rotation.x = 0;
             if (onComplete) onComplete();
             return true; // Finished
           }
@@ -1157,7 +1429,11 @@
 
       const promotedMesh = this.createPieceMesh(newType, color);
       const pos = squareToWorld(square);
-      promotedMesh.position.set(pos.x, 0, pos.z);
+      const yPos = this.viewMode === '2d' ? 0.02 : 0;
+      promotedMesh.position.set(pos.x, yPos, pos.z);
+      if (this.viewMode === '2d') {
+        promotedMesh.rotation.y = this.isFlipped ? Math.PI : 0;
+      }
       promotedMesh.scale.set(0.1, 0.1, 0.1);
 
       this.piecesGroup.add(promotedMesh);
@@ -1280,6 +1556,80 @@
     }
 
     /**
+     * Sets view mode: '3d' (default) or '2d' (procedural top-down 2D tokens)
+     */
+    setViewMode(mode) {
+      if (mode !== '2d' && mode !== '3d') mode = '3d';
+      if (this.viewMode === mode) return;
+      this.viewMode = mode;
+
+      // Notify window.ChessPieces3D if supported
+      if (window.ChessPieces3D && typeof window.ChessPieces3D.setMode === 'function') {
+        window.ChessPieces3D.setMode(mode);
+      }
+
+      // Rebuild all active pieces for the new mode
+      this.rebuildAllPieces();
+
+      // Configure camera & controls for the mode
+      if (mode === '2d') {
+        this.cameraTarget.set(0, 0, 0);
+        this.targetSpherical.phi = 0.001;
+        this.targetSpherical.theta = this.isFlipped ? Math.PI : 0.0;
+        this.targetSpherical.radius = 11.0;
+        this.updatePieceOrientations2D();
+      } else {
+        this.cameraTarget.set(0, 0, 0);
+        this.targetSpherical.phi = Math.PI / 3.4;
+        this.targetSpherical.theta = this.isFlipped ? Math.PI : 0.0;
+        this.targetSpherical.radius = 12.0;
+      }
+    }
+
+    getViewMode() {
+      return this.viewMode;
+    }
+
+    toggleViewMode() {
+      this.setViewMode(this.viewMode === '2d' ? '3d' : '2d');
+      return this.viewMode;
+    }
+
+    rebuildAllPieces() {
+      for (const [sq, entry] of this.pieceMap.entries()) {
+        const oldMesh = entry.mesh;
+        const newMesh = this.createPieceMesh(entry.type, entry.color);
+        const pos = squareToWorld(sq);
+        const yPos = this.viewMode === '2d' ? 0.02 : 0;
+        newMesh.position.set(pos.x, yPos, pos.z);
+
+        if (this.viewMode === '2d') {
+          newMesh.rotation.y = this.isFlipped ? Math.PI : 0;
+        } else {
+          if (entry.type === 'n' && entry.color === 'b') {
+            newMesh.rotation.y = Math.PI;
+          } else {
+            newMesh.rotation.y = 0;
+          }
+        }
+        newMesh.userData = { square: sq, type: entry.type, color: entry.color, mode: this.viewMode };
+
+        this.piecesGroup.remove(oldMesh);
+        this.disposeObject(oldMesh);
+        this.piecesGroup.add(newMesh);
+        entry.mesh = newMesh;
+      }
+    }
+
+    updatePieceOrientations2D() {
+      if (this.viewMode !== '2d') return;
+      const targetRotY = this.isFlipped ? Math.PI : 0;
+      for (const entry of this.pieceMap.values()) {
+        entry.mesh.rotation.y = targetRotY;
+      }
+    }
+
+    /**
      * Preset Camera Transitions: 'white', 'black', 'top', 'auto'
      */
     setCameraView(viewName) {
@@ -1289,17 +1639,21 @@
 
       if (viewName === 'white') {
         this.targetSpherical.theta = 0.0;
-        this.targetSpherical.phi = Math.PI / 3.4;
-        this.targetSpherical.radius = 11.8;
+        this.targetSpherical.phi = this.viewMode === '2d' ? 0.001 : Math.PI / 3.4;
+        this.targetSpherical.radius = this.viewMode === '2d' ? 11.0 : 11.8;
         this.isFlipped = false;
       } else if (viewName === 'black') {
         this.targetSpherical.theta = Math.PI;
-        this.targetSpherical.phi = Math.PI / 3.4;
-        this.targetSpherical.radius = 11.8;
+        this.targetSpherical.phi = this.viewMode === '2d' ? 0.001 : Math.PI / 3.4;
+        this.targetSpherical.radius = this.viewMode === '2d' ? 11.0 : 11.8;
         this.isFlipped = true;
       } else if (viewName === 'top') {
-        this.targetSpherical.phi = 0.08;
+        this.targetSpherical.phi = 0.001;
         this.targetSpherical.radius = 11.0;
+      }
+
+      if (this.viewMode === '2d') {
+        this.updatePieceOrientations2D();
       }
     }
 
@@ -1311,6 +1665,9 @@
         this.setCameraView('white');
       } else {
         this.setCameraView('black');
+      }
+      if (this.viewMode === '2d') {
+        this.updatePieceOrientations2D();
       }
     }
 
@@ -1454,11 +1811,13 @@
         // Activate piece drag
         this.draggedPiece = this.dragCandidate;
         this.dragCandidate = null;
-        this.draggedPiece.mesh.position.y = 0.55; // Lift piece
+        const liftY = this.viewMode === '2d' ? 0.06 : 0.55;
+        this.draggedPiece.mesh.position.y = liftY; // Lift piece
+        this.interactionPlane.constant = -liftY;
       }
 
       if (this.draggedPiece) {
-        // Raycast against horizontal plane at y = 0.55
+        // Raycast against horizontal interaction plane
         this.raycaster.setFromCamera(this.pointer, this.camera);
         const intersectPoint = new THREE.Vector3();
         if (this.raycaster.ray.intersectPlane(this.interactionPlane, intersectPoint)) {
@@ -1481,7 +1840,16 @@
         const moveX = event.clientX - lastX;
         const moveY = event.clientY - lastY;
 
-        if (this.pointerButton === 2 || event.shiftKey) {
+        if (this.viewMode === '2d') {
+          // Lock polar angle in 2D mode, allow panning if right-drag or shift
+          this.targetSpherical.phi = 0.001;
+          this.cameraSpherical.phi = 0.001;
+          if (this.pointerButton === 2 || event.shiftKey) {
+            const panSpeed = 0.012 * (this.cameraSpherical.radius / 11.0);
+            this.cameraTarget.x -= moveX * panSpeed;
+            this.cameraTarget.z -= moveY * panSpeed * (this.isFlipped ? -1 : 1);
+          }
+        } else if (this.pointerButton === 2 || event.shiftKey) {
           // Pan camera target
           const panSpeed = 0.012 * (this.cameraSpherical.radius / 12.0);
           const right = new THREE.Vector3();
@@ -1528,7 +1896,7 @@
 
         // Reset piece position back to original before triggering callbacks
         this.draggedPiece.mesh.position.copy(this.draggedPiece.originalPos);
-        this.draggedPiece.mesh.position.y = 0;
+        this.draggedPiece.mesh.position.y = this.viewMode === '2d' ? 0.02 : 0;
 
         if (targetSquare && targetSquare !== fromSquare) {
           // Drop triggered

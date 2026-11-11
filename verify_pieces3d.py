@@ -66,8 +66,18 @@ def verify_pieces3d():
     assert "createFeltPad" in content, "Missing createFeltPad function"
     assert "isFelt" in content, "Missing isFelt metadata flag"
 
-    print(f"    Validated {len(v2_matches)} Lathe profile points across all turned pieces.")
-    print("    Validated high-contrast materials and felt base pad integration.")
+    print("[6] Checking 3D Inverted-Hull Outlines & 2D Procedural Mode...")
+    assert "setMode" in content, "Missing setMode"
+    assert "getMode" in content, "Missing getMode"
+    assert "createPiece2DMesh" in content, "Missing createPiece2DMesh"
+    assert "addInvertedHullOutline" in content, "Missing addInvertedHullOutline"
+    assert "getOutlineMaterial" in content, "Missing getOutlineMaterial"
+    assert "isOutline" in content, "Missing isOutline metadata tag"
+    assert "drawPieceVectorSilhouette" in content, "Missing drawPieceVectorSilhouette"
+    assert "get2DPieceTexture" in content, "Missing get2DPieceTexture"
+    assert "THREE.BackSide" in content, "Missing BackSide for inverted hull"
+
+    print("    Validated inverted-hull outline and 2D procedural vector silhouettes.")
 
     print("\n>>> ALL PIECES3D CHECKS PASSED SUCCESSFULLY! <<<")
 

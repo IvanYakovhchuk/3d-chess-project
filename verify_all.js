@@ -204,10 +204,15 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
   class MockVector3 {
     constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
     set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+    copy(v) { if (v) { this.x = v.x; this.y = v.y; this.z = v.z; } return this; }
+    clone() { return new MockVector3(this.x, this.y, this.z); }
+    multiplyScalar(s) { this.x *= s; this.y *= s; this.z *= s; return this; }
   }
   class MockEuler {
     constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
     set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+    copy(e) { if (e) { this.x = e.x; this.y = e.y; this.z = e.z; } return this; }
+    clone() { return new MockEuler(this.x, this.y, this.z); }
   }
   class MockObject3D {
     constructor() {
@@ -290,6 +295,12 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
   class MockConeGeometry extends MockGeometry {
     constructor(r, h, s) { super(); this.parameters = { r, h, s }; }
   }
+  class MockCircleGeometry extends MockGeometry {
+    constructor(r, s) { super(); this.parameters = { r, s }; }
+  }
+  class MockRingGeometry extends MockGeometry {
+    constructor(ri, ro, s) { super(); this.parameters = { ri, ro, s }; }
+  }
   class MockExtrudeGeometry extends MockGeometry {
     constructor(shape, opts) { super(); this.shape = shape; this.opts = opts; }
   }
@@ -301,10 +312,17 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
     quadraticCurveTo(a, b, c, d) { this.curves.push(['quad', a, b, c, d]); return this; }
     closePath() { this.curves.push(['closePath']); return this; }
   }
+  class MockColor {
+    constructor(hex = 0) { this.hex = hex; }
+    set(c) { this.hex = c; return this; }
+  }
   class MockMaterial {
     constructor(params = {}) {
       this.isMaterial = true;
       Object.assign(this, params);
+      if (!(this.color instanceof MockColor)) {
+        this.color = new MockColor(typeof this.color === 'number' ? this.color : 0);
+      }
     }
     dispose() {}
   }
@@ -320,14 +338,19 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
     SphereGeometry: MockSphereGeometry,
     BoxGeometry: MockBoxGeometry,
     ConeGeometry: MockConeGeometry,
+    CircleGeometry: MockCircleGeometry,
+    RingGeometry: MockRingGeometry,
     TorusGeometry: MockTorusGeometry,
     ExtrudeGeometry: MockExtrudeGeometry,
     Shape: MockShape,
     Matrix4: MockMatrix4,
     MeshStandardMaterial: MockMaterial,
     MeshPhysicalMaterial: MockMaterial,
+    MeshBasicMaterial: MockMaterial,
     CanvasTexture: function (canvas) { this.canvas = canvas; },
-    Color: function (hex) { this.hex = hex; },
+    Color: function (hex) { this.hex = hex; this.set = function(c) { this.hex = c; }; },
+    FrontSide: 0,
+    BackSide: 1,
     DoubleSide: 2,
     ClampToEdgeWrapping: 1000,
     RepeatWrapping: 1001
@@ -395,7 +418,95 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
 });
 
 // ============================================================================
-// 5. 3D Scene (scene3d.js) API Contracts & Math Mapping
+// 5. 3D Piece Contours & Procedural 2D Mode (pieces3d.js & scene3d.js)
+// ============================================================================
+runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
+  const piecesModule = require('./pieces3d.js');
+  const sceneModule = require('./scene3d.js');
+
+  // 1. Verify 3D piece outlines
+  piecesModule.setMode('3d');
+  assertEqual(piecesModule.getMode(), '3d', 'Mode is 3d');
+
+  const pieceTypes = ['p', 'r', 'n', 'b', 'q', 'k'];
+  const colors = ['w', 'b'];
+  const themes = ['classic', 'marble', 'neon', 'wood'];
+
+  let outlinedCount = 0;
+  for (const c of colors) {
+    for (const t of pieceTypes) {
+      const mesh3d = piecesModule.createPieceMesh(t, c, 'classic', '3d');
+      let hasOutline = false;
+      mesh3d.traverse(child => {
+        if (child.isMesh && child.userData.isOutline) {
+          hasOutline = true;
+          assertEqual(child.material.side, 1, `Outline mesh has side: THREE.BackSide (1)`);
+        }
+      });
+      assert(hasOutline, `3D Piece ${t}_${c} has inverted-hull outline mesh`);
+      if (hasOutline) outlinedCount++;
+    }
+  }
+  assertEqual(outlinedCount, 12, 'All 12 3D pieces have inverted-hull outlines');
+
+  // 2. Verify 2D procedural token generation (48 combinations)
+  piecesModule.setMode('2d');
+  assertEqual(piecesModule.getMode(), '2d', 'Mode set to 2d');
+
+  let generated2DCount = 0;
+  for (const theme of themes) {
+    for (const color of colors) {
+      for (const type of pieceTypes) {
+        const mesh2d = piecesModule.createPiece2DMesh(type, color, theme);
+        assert(mesh2d !== null, `2D Mesh created: ${type} (${color}, ${theme})`);
+        assertEqual(mesh2d.userData.type, type, `2D userData.type is '${type}'`);
+        assertEqual(mesh2d.userData.color, color, `2D userData.color is '${color}'`);
+        assertEqual(mesh2d.userData.mode, '2d', `2D userData.mode is '2d'`);
+        assertEqual(mesh2d.userData.is2D, true, `2D userData.is2D is true`);
+        assert(mesh2d.userData.height <= 0.05, `2D height is flat puck (<= 0.05)`);
+
+        // Verify subcomponents: felt pad, puck, ring, face
+        let hasFelt = false;
+        let hasPuck = false;
+        let hasRing = false;
+        let hasFace = false;
+        mesh2d.traverse(node => {
+          if (node.isMesh) {
+            if (node.userData.isFelt) hasFelt = true;
+            if (node.userData.isPuck) hasPuck = true;
+            if (node.userData.isRing) hasRing = true;
+            if (node.userData.isFace) hasFace = true;
+          }
+        });
+        assert(hasFelt, `2D piece ${type}_${color}_${theme} has felt base`);
+        assert(hasPuck, `2D piece ${type}_${color}_${theme} has puck cylinder body`);
+        assert(hasRing, `2D piece ${type}_${color}_${theme} has outer rim ring`);
+        assert(hasFace, `2D piece ${type}_${color}_${theme} has vector face mesh`);
+        generated2DCount++;
+      }
+    }
+  }
+  assertEqual(generated2DCount, 48, 'All 48 2D piece combinations generated successfully');
+
+  // Test dynamic 2D theme update
+  const test2dPawn = piecesModule.createPiece2DMesh('p', 'w', 'classic');
+  piecesModule.updatePieceTheme(test2dPawn, 'neon');
+  assertEqual(test2dPawn.userData.theme, 'neon', '2D piece theme updated dynamically to neon');
+
+  // 3. Verify Scene 2D API methods
+  const proto = sceneModule.prototype;
+  assertEqual(typeof proto.setViewMode, 'function', 'ChessScene3D has setViewMode method');
+  assertEqual(typeof proto.getViewMode, 'function', 'ChessScene3D has getViewMode method');
+  assertEqual(typeof proto.toggleViewMode, 'function', 'ChessScene3D has toggleViewMode method');
+  assertEqual(typeof proto.rebuildAllPieces, 'function', 'ChessScene3D has rebuildAllPieces method');
+  assertEqual(typeof proto.updatePieceOrientations2D, 'function', 'ChessScene3D has updatePieceOrientations2D method');
+
+  // Reset pieces mode back to 3d
+  piecesModule.setMode('3d');
+});
+
+// ============================================================================
+// 6. 3D Scene (scene3d.js) API Contracts & Math Mapping
 // ============================================================================
 runSuite('3D Scene (scene3d.js) API Contracts & Board Coordinate Math', () => {
   // Load scene3d.js

@@ -51,6 +51,12 @@
 
       <!-- Quick Theme & Audio Controls -->
       <div class="top-actions">
+        <!-- 3D / 2D View Mode Switcher -->
+        <div class="mode-toggle-group" role="group" aria-label="Perspective Mode">
+          <button id="btn-mode-3d" class="mode-btn active" title="Switch to 3D View [V]">3D</button>
+          <button id="btn-mode-2d" class="mode-btn" title="Switch to 2D Procedural View [V]">2D</button>
+        </div>
+
         <!-- Visual Theme Selector -->
         <div class="theme-picker-group">
           <label for="theme-selector" class="sr-only">Board Theme</label>
@@ -119,6 +125,7 @@
           <button id="quick-cam-black" class="pill-btn" title="Black Perspective">Black</button>
           <button id="quick-cam-top" class="pill-btn" title="Top-Down Tactical View">Top</button>
           <button id="quick-cam-flip" class="pill-btn" title="Flip View 180°">🔄 Flip</button>
+          <button id="quick-mode-toggle" class="pill-btn mode-pill" title="Toggle 3D / 2D View Mode [V]">2D View</button>
         </div>
 
         <!-- User Player Card (White) -->
@@ -190,7 +197,8 @@
         <!-- Camera & Orbit Settings -->
         <div class="sidebar-section camera-section">
           <div class="section-title-row">
-            <span class="section-title">🎥 View Options</span>
+            <span class="section-title">🎥 View & Mode</span>
+            <span id="active-mode-badge" class="clock-badge">3D Mode</span>
           </div>
           <div class="toggle-row">
             <label class="switch-container" for="toggle-autoflip">
