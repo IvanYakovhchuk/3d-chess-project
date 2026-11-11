@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ChessEngine Browser Test Suite</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; background: #121214; color: #e0e0e0; padding: 20px; }
+    h1 { color: #4ade80; margin-bottom: 5px; }
+    .summary { font-size: 1.2rem; margin: 15px 0; padding: 12px; border-radius: 6px; }
+    .summary.pass { background: rgba(74, 222, 128, 0.15); border: 1px solid #4ade80; color: #4ade80; }
+    .summary.fail { background: rgba(248, 113, 113, 0.15); border: 1px solid #f87171; color: #f87171; }
+    .suite { margin-top: 20px; border: 1px solid #27272a; border-radius: 6px; padding: 12px; background: #18181b; }
+    .suite-title { font-weight: bold; font-size: 1.05rem; color: #60a5fa; margin-bottom: 8px; }
+    .test { margin: 4px 0; font-size: 0.95rem; }
+    .test.pass { color: #86efac; }
+    .test.fail { color: #fca5a5; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>ChessEngine Unit Tests</h1>
+  <div id="summary" class="summary">Running tests...</div>
+  <div id="results"></div>
+
+  <script src="engine.js"></script>
+  <script>
+    let totalTests = 0;
+    let passedTests = 0;
+    let failedTests = 0;
+    const resultsContainer = document.getElementById('results');
+
+    function assert(condition, message, suiteEl) {
+      totalTests++;
+      const div = document.createElement('div');
+      div.className = 'test ' + (condition ? 'pass' : 'fail');
+      if (condition) {
+        passedTests++;
+        div.textContent = `  PASS: ${message}`;
+      } else {
+        failedTests++;
+        div.textContent = `  FAIL: ${message}`;
+      }
+      suiteEl.appendChild(div);
+      if (!condition) throw new Error(message);
+    }
+
+    function assertEqual(actual, expected, message, suiteEl) {
+      assert(actual === expected, `${message} (expected: ${expected}, got: ${actual})`, suiteEl);
+    }
+
+    function runSuite(title, fn) {
+      const suiteEl = document.createElement('div');
+      suiteEl.className = 'suite';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'suite-title';
+      titleEl.textContent = title;
+      suiteEl.appendChild(titleEl);
+      resultsContainer.appendChild(suiteEl);
+
+      try {
+        fn(suiteEl);
+      } catch (err) {
+        const errDiv = document.createElement('div');
+        errDiv.className = 'test fail';
+        errDiv.textContent = `  Suite aborted: ${err.message}`;
+        suiteEl.appendChild(errDiv);
+      }
+    }
+
+    // Run suites
+    runSuite('1. Initial State & Board Representation', (el) => {
+      const game = new ChessEngine();
+      const board = game.getBoard();
+      assertEqual(board.length, 8, 'Board has 8 rows', el);
+      assertEqual(board[0].length, 8, 'Board has 8 columns', el);
+      assertEqual(board[0][0].type, 'r', 'Black rook on a8', el);
+      assertEqual(board[0][0].color, 'b', 'Black rook color', el);
+      assertEqual(board[0][0].square, 'a8', 'Black rook square property', el);
+      assertEqual(board[7][4].type, 'k', 'White king on e1', el);
+      assertEqual(board[7][4].square, 'e1', 'White king square property', el);
+      assertEqual(game.getTurn(), 'w', 'White moves first', el);
+      assertEqual(game.isCheck(), false, 'Not in check at start', el);
+      assertEqual(game.isCheckmate(), false, 'Not checkmate at start', el);
+      assertEqual(game.isStalemate(), false, 'Not stalemate at start', el);
+      assertEqual(game.isDraw(), false, 'Not draw at start', el);
+      assertEqual(game.exportFEN(), 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'Starting FEN matches', el);
+    });
+
+    runSuite('2. Pawn Movement, Double Step, En Passant, Promotion', (el) => {
+      const game = new ChessEngine();
+      const e2Moves = game.getLegalMoves('e2');
+      assert(e2Moves.some(m => m.to === 'e4'), 'e2 can move to e4', el);
+      assert(e2Moves.includes('e4'), 'Array helper includes e4', el);
+      game.makeMove('e2e4');
+      assertEqual(game.getTurn(), 'b', 'Turn changed to black', el);
+      assertEqual(game.exportFEN().split(' ')[3], 'e3', 'En passant square is e3', el);
+
+      // En passant capture
+      const epGame = new ChessEngine();
+      epGame.makeMove('e2e4');
+      epGame.makeMove('g8f6');
+      epGame.makeMove('e4e5');
+      epGame.makeMove('d7d5');
+      const epMoves = epGame.getLegalMoves('e5');
+      assert(epMoves.some(m => m.to === 'd6'), 'En passant to d6 legal', el);
+      epGame.makeMove('e5d6');
+      assertEqual(epGame.getPiece('d5'), null, 'Captured pawn on d5 removed', el);
+      assertEqual(epGame.getPiece('d6').type, 'p', 'Capturing pawn on d6', el);
+      assertEqual(epGame.getCapturedPieces().w.length, 1, 'White captured 1 piece', el);
+
+      // Promotion
+      const promoGame = new ChessEngine('8/4P3/8/8/8/8/8/k6K w - - 0 1');
+      const promoMoves = promoGame.getLegalMoves('e7');
+      assertEqual(promoMoves.length, 4, '4 promotion choices', el);
+      promoGame.makeMove({ from: 'e7', to: 'e8', promotion: 'q' });
+      assertEqual(promoGame.getPiece('e8').type, 'q', 'Promoted to Queen', el);
+    });
+
+    runSuite('3. Castling Rules & Move Objects', (el) => {
+      const castleGame = new ChessEngine('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+      const kMove = castleGame.makeMove({ from: 'e1', to: 'g1' });
+      assertEqual(castleGame.getPiece('g1').type, 'k', 'King moved to g1', el);
+      assertEqual(castleGame.getPiece('f1').type, 'r', 'Rook moved to f1', el);
+      assert(kMove.rookMove !== null, 'Castling returns rookMove', el);
+      assertEqual(kMove.rookMove.from, 'h1', 'rookMove.from is h1', el);
+      assertEqual(kMove.rookMove.to, 'f1', 'rookMove.to is f1', el);
+
+      // Black queenside castle
+      const qMove = castleGame.makeMove({ from: 'e8', to: 'c8' });
+      assertEqual(castleGame.getPiece('c8').type, 'k', 'Black king on c8', el);
+      assertEqual(castleGame.getPiece('d8').type, 'r', 'Black rook on d8', el);
+      assertEqual(qMove.rookMove.from, 'a8', 'rookMove.from is a8', el);
+      assertEqual(qMove.rookMove.to, 'd8', 'rookMove.to is d8', el);
+
+      // Restrictions
+      const checkCastle = new ChessEngine('r3k2r/8/8/8/8/8/4r3/R3K2R w KQkq - 0 1');
+      assert(!checkCastle.getLegalMoves('e1').some(m => m.to === 'g1'), 'Cannot castle out of check', el);
+    });
+
+    runSuite('4. Checkmate, Stalemate & Draw Rules', (el) => {
+      // Scholar's Mate
+      const scholars = new ChessEngine();
+      scholars.makeMove('e2e4');
+      scholars.makeMove('e7e5');
+      scholars.makeMove('d1h5');
+      scholars.makeMove('b8c6');
+      scholars.makeMove('f1c4');
+      scholars.makeMove('g8f6');
+      const mate = scholars.makeMove('h5f7');
+      assertEqual(mate.san, 'Qxf7#', 'SAN has # for checkmate', el);
+      assertEqual(scholars.isCheckmate(), true, 'Checkmate detected', el);
+      assertEqual(scholars.getGameStatus().winner, 'w', 'White winner', el);
+
+      // Stalemate
+      const stale = new ChessEngine('7k/5Q2/6K1/8/8/8/8/8 b - - 0 1');
+      assertEqual(stale.isStalemate(), true, 'Stalemate detected', el);
+      assertEqual(stale.isDraw(), true, 'Draw on stalemate', el);
+      assertEqual(stale.getDrawReason(), 'stalemate', 'Draw reason is stalemate', el);
+
+      // Insufficient material
+      const kvk = new ChessEngine('8/8/4k3/8/8/4K3/8/8 w - - 0 1');
+      assertEqual(kvk.isInsufficientMaterial(), true, 'K vs K is insufficient material', el);
+
+      // 50-move rule
+      const fifty = new ChessEngine('8/8/4k3/8/8/4K3/8/8 w - - 100 50');
+      assertEqual(fifty.isFiftyMoveRule(), true, '50-move rule triggered', el);
+    });
+
+    runSuite('5. History, Undo & Static API', (el) => {
+      const game = new ChessEngine();
+      game.makeMove('e2e4');
+      game.makeMove('e7e5');
+      assertEqual(game.getHistory().length, 2, 'History has 2 moves', el);
+      const undone = game.undo();
+      assertEqual(undone.san, 'e5', 'Undone e5', el);
+      assertEqual(game.getTurn(), 'b', 'Reverted turn to black', el);
+
+      // Static API
+      ChessEngine.reset();
+      assertEqual(ChessEngine.getTurn(), 'w', 'Static getTurn returns w', el);
+    });
+
+    // Summary
+    const summaryEl = document.getElementById('summary');
+    if (failedTests === 0) {
+      summaryEl.className = 'summary pass';
+      summaryEl.textContent = `ALL ${totalTests} TESTS PASSED SUCCESSFULLY!`;
+    } else {
+      summaryEl.className = 'summary fail';
+      summaryEl.textContent = `${failedTests} OF ${totalTests} TESTS FAILED!`;
+    }
+  </script>
+</body>
+</html>

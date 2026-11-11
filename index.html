@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Royal 3D Chess | Grandmaster Experience</title>
+  <meta name="description" content="Immersive 3D Browser Chess with Three.js, full standard rules, procedural Staunton pieces, glassmorphism HUD, timers, and Web Audio effects.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Three.js r128 from cdnjs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <!-- Game engine & 3D components -->
+  <script src="engine.js"></script>
+  <script src="pieces3d.js"></script>
+  <script src="scene3d.js"></script>
+</head>
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="chess-canvas-container" class="canvas-container"></div>
+
+  <!-- Glassmorphism HUD Overlay -->
+  <div id="hud-overlay" class="hud-overlay">
+    
+    <!-- Top Navigation & Status Bar -->
+    <header class="hud-topbar glass-card">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M19 22H5v-2h14v2zm-2-4H7v-2h10v2zm-2-4.5V11c0-1.66-1.34-3-3-3s-3 1.34-3 3v2.5c-1.38.86-2 2.27-2 3.5h10c0-1.23-.62-2.64-2-3.5zM12 2a3 3 0 0 1 3 3c0 1.31-.84 2.42-2 2.83V9h-2V7.83C9.84 7.42 9 6.31 9 5a3 3 0 0 1 3-3z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">CHESS<span class="highlight">3D</span></span>
+          <span class="brand-sub">ROYAL PVP</span>
+        </div>
+      </div>
+
+      <!-- Center Status Banner -->
+      <div id="turn-banner" class="status-banner turn-white">
+        <div class="banner-pulse"></div>
+        <div class="banner-icon-container" id="banner-turn-icon">♔</div>
+        <div class="banner-text-group">
+          <span class="banner-main" id="banner-main-text">White's Turn</span>
+          <span class="banner-sub" id="banner-sub-text">Select a piece to move</span>
+        </div>
+      </div>
+
+      <!-- Quick Theme & Audio Controls -->
+      <div class="top-actions">
+        <!-- Visual Theme Selector -->
+        <div class="theme-picker-group">
+          <label for="theme-selector" class="sr-only">Board Theme</label>
+          <div class="custom-select-wrapper">
+            <select id="theme-selector" class="glass-select" title="Change visual theme">
+              <option value="classic">🎨 Classic</option>
+              <option value="marble">🏛️ Marble</option>
+              <option value="neon">⚡ Neon Glow</option>
+              <option value="wood">🪵 Woodcraft</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Sound FX Toggle -->
+        <button id="btn-sound-toggle" class="glass-btn icon-btn" title="Toggle Sound FX" aria-label="Toggle Sound">
+          <svg id="icon-sound-on" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+          <svg id="icon-sound-off" class="hidden" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27l4.73 4.73H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+          </svg>
+        </button>
+
+        <!-- Sidebar Toggle (Mobile / Responsive) -->
+        <button id="btn-sidebar-toggle" class="glass-btn icon-btn mobile-only" title="Toggle Move History & Settings" aria-label="Toggle Panel">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area: Player Panels on left/top/bottom, Game Sidebar on right -->
+    <div class="hud-body">
+      
+      <!-- Player Panels Floating Overlay -->
+      <div class="players-column">
+        
+        <!-- Opponent Player Card (Black) -->
+        <div id="player-card-b" class="player-card glass-card">
+          <div class="player-header">
+            <div class="player-avatar black-avatar">
+              <span class="avatar-piece">♚</span>
+              <span class="turn-indicator-dot"></span>
+            </div>
+            <div class="player-info">
+              <div class="player-name-row">
+                <span class="player-name">Black</span>
+                <span class="player-role-badge">Player 2</span>
+              </div>
+              <div class="material-row">
+                <span id="material-b" class="material-advantage hidden">+0</span>
+                <div id="captured-b" class="captured-tray" title="Pieces captured by Black"></div>
+              </div>
+            </div>
+            <div class="player-clock-container">
+              <div id="clock-b" class="player-clock">∞</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating Quick Camera Controls (Mobile/Desktop quick pills) -->
+        <div class="camera-pill-bar glass-card">
+          <span class="pill-label">Camera</span>
+          <button id="quick-cam-white" class="pill-btn active" title="White Perspective">White</button>
+          <button id="quick-cam-black" class="pill-btn" title="Black Perspective">Black</button>
+          <button id="quick-cam-top" class="pill-btn" title="Top-Down Tactical View">Top</button>
+          <button id="quick-cam-flip" class="pill-btn" title="Flip View 180°">🔄 Flip</button>
+        </div>
+
+        <!-- User Player Card (White) -->
+        <div id="player-card-w" class="player-card glass-card active-turn">
+          <div class="player-header">
+            <div class="player-avatar white-avatar">
+              <span class="avatar-piece">♔</span>
+              <span class="turn-indicator-dot"></span>
+            </div>
+            <div class="player-info">
+              <div class="player-name-row">
+                <span class="player-name">White</span>
+                <span class="player-role-badge">Player 1</span>
+              </div>
+              <div class="material-row">
+                <span id="material-w" class="material-advantage hidden">+0</span>
+                <div id="captured-w" class="captured-tray" title="Pieces captured by White"></div>
+              </div>
+            </div>
+            <div class="player-clock-container">
+              <div id="clock-w" class="player-clock">∞</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right Glass Sidebar: Game HUD, Moves, Timers, Actions -->
+      <aside id="game-sidebar" class="game-sidebar glass-card">
+        
+        <!-- Sidebar Header with Tabs or Sections -->
+        <div class="sidebar-section time-controls-section">
+          <div class="section-title-row">
+            <span class="section-title">⏱️ Time Control</span>
+            <span id="active-clock-label" class="clock-badge">Unlimited</span>
+          </div>
+          <div class="time-control-buttons">
+            <button class="tc-btn active" data-time="0">Unlimited</button>
+            <button class="tc-btn" data-time="300">5 min</button>
+            <button class="tc-btn" data-time="600">10 min</button>
+            <button class="tc-btn" data-time="900">15 min</button>
+          </div>
+        </div>
+
+        <!-- Move History Section -->
+        <div class="sidebar-section history-section">
+          <div class="section-title-row">
+            <span class="section-title">📜 Move History</span>
+            <span id="move-counter" class="move-counter-badge">0 moves</span>
+          </div>
+          <div class="move-history-container" id="move-history-container">
+            <table class="move-history-table">
+              <thead>
+                <tr>
+                  <th class="col-num">#</th>
+                  <th class="col-white">White</th>
+                  <th class="col-black">Black</th>
+                </tr>
+              </thead>
+              <tbody id="move-history-body">
+                <tr class="empty-history-row">
+                  <td colspan="3">Moves will appear here...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Camera & Orbit Settings -->
+        <div class="sidebar-section camera-section">
+          <div class="section-title-row">
+            <span class="section-title">🎥 View Options</span>
+          </div>
+          <div class="toggle-row">
+            <label class="switch-container" for="toggle-autoflip">
+              <span class="toggle-label">Auto-flip view on turn</span>
+              <input type="checkbox" id="toggle-autoflip">
+              <span class="slider round"></span>
+            </label>
+          </div>
+          <div class="view-hint">
+            <span>💡 Drag to orbit camera &bull; Scroll to zoom &bull; Right-drag to pan</span>
+          </div>
+        </div>
+
+        <!-- Game Action Buttons -->
+        <div class="sidebar-section actions-section">
+          <div class="action-buttons-grid">
+            <button id="btn-new-game" class="glass-action-btn btn-primary" title="Start a fresh match">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+              </svg>
+              <span>New Game</span>
+            </button>
+
+            <button id="btn-undo-move" class="glass-action-btn" title="Take back the last move">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/>
+              </svg>
+              <span>Undo Move</span>
+            </button>
+
+            <button id="btn-copy-fen" class="glass-action-btn" title="Copy position FEN string">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+              </svg>
+              <span>Copy FEN</span>
+            </button>
+
+            <button id="btn-export-pgn" class="glass-action-btn" title="Export PGN notation">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
+              <span>Copy PGN</span>
+            </button>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+  </div>
+
+  <!-- Pawn Promotion Modal -->
+  <div id="modal-promotion" class="modal-overlay hidden">
+    <div class="modal-card glass-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Promote Your Pawn</h3>
+        <p class="modal-sub">Choose which piece your pawn ascends to</p>
+      </div>
+      <div class="promotion-grid">
+        <button class="promo-choice-btn" data-promo="q">
+          <div class="promo-icon" id="promo-icon-q">♛</div>
+          <span class="promo-name">Queen</span>
+          <span class="promo-key">[Q]</span>
+        </button>
+        <button class="promo-choice-btn" data-promo="r">
+          <div class="promo-icon" id="promo-icon-r">♜</div>
+          <span class="promo-name">Rook</span>
+          <span class="promo-key">[R]</span>
+        </button>
+        <button class="promo-choice-btn" data-promo="b">
+          <div class="promo-icon" id="promo-icon-b">♝</div>
+          <span class="promo-name">Bishop</span>
+          <span class="promo-key">[B]</span>
+        </button>
+        <button class="promo-choice-btn" data-promo="n">
+          <div class="promo-icon" id="promo-icon-n">♞</div>
+          <span class="promo-name">Knight</span>
+          <span class="promo-key">[N]</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Summary Modal -->
+  <div id="modal-game-over" class="modal-overlay hidden">
+    <div class="modal-card glass-modal game-over-card">
+      <div class="game-over-icon-wrapper" id="game-over-icon-box">
+        <div class="game-over-trophy">🏆</div>
+      </div>
+      <h2 id="game-over-title" class="game-over-title">Checkmate!</h2>
+      <p id="game-over-desc" class="game-over-desc">White wins the match by checkmate.</p>
+      
+      <div class="game-over-stats">
+        <div class="stat-pill">
+          <span class="stat-value" id="stat-total-moves">0</span>
+          <span class="stat-label">Total Moves</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-value" id="stat-match-time">00:00</span>
+          <span class="stat-label">Duration</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-value" id="stat-winner-label">White</span>
+          <span class="stat-label">Winner</span>
+        </div>
+      </div>
+
+      <div class="game-over-actions">
+        <button id="btn-modal-rematch" class="glass-action-btn btn-primary modal-action-btn">
+          <span>⚔️ Play Again</span>
+        </button>
+        <button id="btn-modal-close" class="glass-action-btn modal-action-btn">
+          <span>👀 Review Board</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Banner -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Application Entry Point -->
+  <script src="app.js"></script>
+</body>
+</html>

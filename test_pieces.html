@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Test Three.js Mock</title>
+</head>
+<body>
+  <div id="output">Running...</div>
+  <script>
+    // Lightweight mock of THREE.js to verify pieces3d.js in headless browser
+    window.THREE = {
+      Vector2: class {
+        constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+      },
+      Matrix4: class {
+        set() { return this; }
+      },
+      BufferGeometry: class {
+        computeVertexNormals() {}
+        applyMatrix4() { return this; }
+        translate() { return this; }
+        rotateY() { return this; }
+        rotateX() { return this; }
+      },
+      LatheGeometry: class {
+        constructor(points, segments) {
+          this.points = points;
+          this.segments = segments;
+        }
+        computeVertexNormals() {}
+      },
+      SphereGeometry: class {
+        constructor(radius, widthSegments, heightSegments) {
+          this.radius = radius;
+          this.widthSegments = widthSegments;
+          this.heightSegments = heightSegments;
+        }
+        computeVertexNormals() {}
+      },
+      BoxGeometry: class {
+        constructor(width, height, depth) {
+          this.width = width;
+          this.height = height;
+          this.depth = depth;
+        }
+        computeVertexNormals() {}
+      },
+      ConeGeometry: class {
+        constructor(radius, height, radialSegments) {
+          this.radius = radius;
+          this.height = height;
+          this.radialSegments = radialSegments;
+        }
+        computeVertexNormals() {}
+      },
+      ExtrudeGeometry: class {
+        constructor(shape, options) {
+          this.shape = shape;
+          this.options = options;
+        }
+        computeVertexNormals() {}
+        applyMatrix4() { return this; }
+        translate() { return this; }
+      },
+      Shape: class {
+        constructor() { this.curves = []; }
+        moveTo(x, y) { this.curves.push(['moveTo', x, y]); }
+        lineTo(x, y) { this.curves.push(['lineTo', x, y]); }
+        quadraticCurveTo(cx, cy, x, y) { this.curves.push(['quadraticCurveTo', cx, cy, x, y]); }
+        bezierCurveTo(c1x, c1y, c2x, c2y, x, y) { this.curves.push(['bezierCurveTo', c1x, c1y, c2x, c2y, x, y]); }
+        closePath() { this.curves.push(['closePath']); }
+      },
+      Mesh: class {
+        constructor(geometry, material) {
+          this.isMesh = true;
+          this.geometry = geometry;
+          this.material = material;
+          this.position = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; } };
+          this.rotation = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; } };
+          this.userData = {};
+          this.castShadow = false;
+          this.receiveShadow = false;
+        }
+      },
+      Group: class {
+        constructor() {
+          this.isGroup = true;
+          this.children = [];
+          this.position = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; } };
+          this.rotation = { x: 0, y: 0, z: 0, set: function(x, y, z) { this.x = x; this.y = y; this.z = z; } };
+          this.userData = {};
+        }
+        add(child) {
+          this.children.push(child);
+        }
+        traverse(callback) {
+          callback(this);
+          for (const child of this.children) {
+            if (child.traverse) {
+              child.traverse(callback);
+            } else {
+              callback(child);
+            }
+          }
+        }
+      },
+      MeshPhysicalMaterial: class {
+        constructor(params = {}) {
+          this.isMaterial = true;
+          Object.assign(this, params);
+        }
+      },
+      MeshStandardMaterial: class {
+        constructor(params = {}) {
+          this.isMaterial = true;
+          Object.assign(this, params);
+        }
+      },
+      CanvasTexture: class {
+        constructor(canvas) {
+          this.image = canvas;
+          this.repeat = { x: 1, y: 1, set: function(x, y) { this.x = x; this.y = y; } };
+        }
+      },
+      RepeatWrapping: 1000
+    };
+  </script>
+  <script src="pieces3d.js"></script>
+  <script>
+    const results = [];
+    function assert(cond, msg) {
+      if (!cond) {
+        results.push('FAIL: ' + msg);
+        throw new Error(msg);
+      } else {
+        results.push('PASS: ' + msg);
+      }
+    }
+
+    try {
+      assert(typeof window.ChessPieces3D === 'object', 'window.ChessPieces3D is defined');
+      assert(typeof window.ChessPieces3D.createPieceMesh === 'function', 'createPieceMesh is function');
+      assert(typeof window.ChessPieces3D.getPieceHeight === 'function', 'getPieceHeight is function');
+      assert(typeof window.ChessPieces3D.setTheme === 'function', 'setTheme is function');
+
+      const pieceTypes = ['p', 'r', 'n', 'b', 'q', 'k'];
+      const colors = ['w', 'b'];
+      const themes = ['classic', 'marble', 'neon', 'wood'];
+
+      // Test heights
+      for (const t of pieceTypes) {
+        const h = window.ChessPieces3D.getPieceHeight(t);
+        assert(typeof h === 'number' && h > 0.8 && h < 2.5, 'Height for ' + t + ' is ' + h);
+      }
+
+      // Test piece creations across all types, colors, themes
+      for (const th of themes) {
+        window.ChessPieces3D.setTheme(th);
+        for (const c of colors) {
+          for (const t of pieceTypes) {
+            const piece = window.ChessPieces3D.createPieceMesh(t, c, th);
+            assert(piece && piece.isGroup, 'Piece created for ' + t + '-' + c + '-' + th);
+            assert(piece.children.length > 0, 'Piece has child meshes (' + piece.children.length + ')');
+            assert(piece.userData.type === t, 'userData.type matches ' + t);
+            assert(piece.userData.color === c, 'userData.color matches ' + c);
+            assert(piece.userData.theme === th, 'userData.theme matches ' + th);
+
+            // Check shadow flags on all child meshes
+            let meshCount = 0;
+            piece.traverse((node) => {
+              if (node.isMesh) {
+                meshCount++;
+                assert(node.castShadow === true, 'Mesh has castShadow=true');
+                assert(node.receiveShadow === true, 'Mesh has receiveShadow=true');
+                assert(node.material && node.material.isMaterial, 'Mesh has valid material');
+              }
+            });
+            assert(meshCount > 0, 'Found ' + meshCount + ' meshes in ' + t);
+
+            // Check Knight orientation
+            if (t === 'n') {
+              if (c === 'b') {
+                assert(Math.abs(piece.rotation.y - Math.PI) < 0.001, 'Black knight rotated PI');
+              } else {
+                assert(piece.rotation.y === 0, 'White knight rotation is 0');
+              }
+            }
+
+            // Test updatePieceTheme
+            window.ChessPieces3D.updatePieceTheme(piece, 'neon');
+            assert(piece.userData.theme === 'neon', 'updatePieceTheme updated theme to neon');
+          }
+        }
+      }
+
+      document.getElementById('output').innerHTML = '<pre id="res">' + results.join('\n') + '\nALL TESTS PASSED SUCCESSFULLY!</pre>';
+    } catch (e) {
+      document.getElementById('output').innerHTML = '<pre id="res">' + results.join('\n') + '\nERROR: ' + e.message + '\n' + e.stack + '</pre>';
+    }
+  </script>
+</body>
+</html>

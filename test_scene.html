@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ChessScene3D Unit Tests</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="engine.js"></script>
+  <script src="pieces3d.js"></script>
+  <script src="scene3d.js"></script>
+</head>
+<body>
+  <div id="container" style="width: 800px; height: 600px;"></div>
+  <div id="output">Running...</div>
+  <script>
+    const output = document.getElementById('output');
+    const logs = [];
+
+    function assert(cond, msg) {
+      if (!cond) {
+        throw new Error("Assertion failed: " + msg);
+      }
+      logs.push("PASS: " + msg);
+    }
+
+    try {
+      assert(typeof window.ChessScene3D === 'function', "ChessScene3D is defined as a class/function");
+      
+      const container = document.getElementById('container');
+      const callbacks = {
+        onSquareClick: (sq) => logs.push("Clicked: " + sq),
+        onPieceDrop: (from, to) => logs.push("Drop: " + from + " -> " + to)
+      };
+
+      const scene = new window.ChessScene3D(container, callbacks);
+      assert(scene !== null, "ChessScene3D instantiated successfully");
+
+      // Verify coordinate mapping
+      const a1Pos = scene.squareMeshes.find(m => m.userData.square === 'a1').position;
+      assert(Math.abs(a1Pos.x - (-3.5)) < 0.001, "a1 x coordinate is -3.5");
+      assert(Math.abs(a1Pos.z - (3.5)) < 0.001, "a1 z coordinate is +3.5");
+
+      const h8Pos = scene.squareMeshes.find(m => m.userData.square === 'h8').position;
+      assert(Math.abs(h8Pos.x - (3.5)) < 0.001, "h8 x coordinate is +3.5");
+      assert(Math.abs(h8Pos.z - (-3.5)) < 0.001, "h8 z coordinate is -3.5");
+
+      // Test board synchronization with initial chess engine state
+      const engine = new window.ChessEngine();
+      scene.syncBoard(engine.getBoard(), null);
+      assert(scene.pieceMap.size === 32, "Initial board has exactly 32 pieces");
+      assert(scene.pieceMap.has('e1'), "Piece at e1 exists");
+      assert(scene.pieceMap.get('e1').type === 'k', "Piece at e1 is King");
+      assert(scene.pieceMap.get('e1').color === 'w', "Piece at e1 is White");
+
+      // Test move synchronization (Pawn advance e2 to e4)
+      const move1 = engine.makeMove('e2e4');
+      scene.syncBoard(engine.getBoard(), move1);
+      assert(!scene.pieceMap.has('e2'), "e2 is now empty");
+      assert(scene.pieceMap.has('e4'), "e4 now has pawn");
+      assert(scene.activeAnimations.length > 0, "Piece animation was queued");
+
+      // Test Knight jump move (g8 to f6)
+      const move2 = engine.makeMove('g8f6');
+      scene.syncBoard(engine.getBoard(), move2);
+      assert(scene.pieceMap.has('f6'), "f6 now has Knight");
+
+      // Test Castling simultaneous rook move
+      const engineCastle = new window.ChessEngine('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1');
+      scene.syncBoard(engineCastle.getBoard(), null);
+      const castleMove = engineCastle.makeMove('e1g1');
+      scene.syncBoard(engineCastle.getBoard(), castleMove);
+      assert(scene.pieceMap.has('g1'), "King at g1 after kingside castle");
+      assert(scene.pieceMap.has('f1'), "Rook at f1 after kingside castle");
+
+      // Test 3D Square highlights
+      scene.highlightSquares({
+        selected: 'e4',
+        legalMoves: ['e5', 'd5'],
+        lastMove: { from: 'e2', to: 'e4' },
+        checkSquare: 'e1'
+      });
+      assert(scene.highlightMeshes.length > 0, "Highlights created successfully");
+
+      scene.clearHighlights();
+      assert(scene.highlightMeshes.length === 0, "Highlights cleared successfully");
+
+      // Test theme switching
+      const themes = ['classic', 'marble', 'neon', 'wood'];
+      for (const t of themes) {
+        scene.setTheme(t);
+        assert(scene.theme === t, "Theme changed to " + t);
+      }
+
+      // Test camera views
+      scene.setCameraView('white');
+      assert(scene.targetSpherical.theta === 0.0, "White view theta is 0");
+      scene.setCameraView('black');
+      assert(scene.targetSpherical.theta === Math.PI, "Black view theta is PI");
+      scene.flipBoard();
+      assert(scene.targetSpherical.theta === 0.0, "flipBoard toggled back to 0");
+      scene.setCameraView('top');
+
+      // Test destroy
+      scene.destroy();
+
+      output.innerHTML = "<h3>ALL " + logs.length + " CHECKS PASSED</h3><pre>" + logs.join("\n") + "</pre>";
+      window.__TEST_SUCCESS__ = true;
+    } catch (e) {
+      output.innerHTML = "<h3>TEST FAILED: " + e.message + "</h3><pre>" + e.stack + "</pre>";
+      window.__TEST_SUCCESS__ = false;
+    }
+  </script>
+</body>
+</html>

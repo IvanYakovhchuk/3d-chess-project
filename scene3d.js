@@ -1,0 +1,1678 @@
+/**
+ * scene3d.js - Interactive Three.js 3D Chessboard, Lighting, Camera Controller,
+ * Raycasting, Highlights, and Piece Move Animations.
+ *
+ * Implements:
+ * - 8x8 Board centered at origin, rank 8 at z=-3.5 to rank 1 at z=+3.5,
+ *   file 'a' at x=-3.5 to file 'h' at x=+3.5.
+ * - Board bevel & outer frame with algebraic coordinate labels (a-h, 1-8).
+ * - Multi-theme support: 'classic', 'marble', 'neon', 'wood'.
+ * - Shadow-casting directional lights & ambient/rim lighting.
+ * - Smooth orbital camera controls (orbit, zoom, pan) with preset transitions
+ *   ('white', 'black', 'top', 'auto') and flipBoard().
+ * - Full raycasting for both click-to-move and drag-and-drop.
+ * - 3D square highlights for selected square, legal moves (dots & capture rings),
+ *   last move glow, and pulsing red check danger indicator.
+ * - Smooth piece animations: sliding pieces, parabolic jump arc for knights,
+ *   simultaneous rook movements during castling, captures & promotions.
+ * - Graceful fallback piece generator if window.ChessPieces3D is loading or unavailable.
+ */
+
+(function (root, factory) {
+  if (typeof module === 'object' && typeof module.exports === 'object') {
+    let threeLib = root.THREE;
+    if (!threeLib && typeof require === 'function') {
+      try {
+        threeLib = require('three');
+      } catch (e) {
+        threeLib = null;
+      }
+    }
+    module.exports = factory(threeLib);
+  } else {
+    root.ChessScene3D = factory(root.THREE);
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this, function (THREE) {
+  'use strict';
+
+  // Constants & Board Mapping
+  const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+  function squareToCoords(square) {
+    if (!square || square.length < 2) return null;
+    const file = square[0].toLowerCase();
+    const rank = square[1];
+    const col = FILES.indexOf(file);
+    const row = RANKS.indexOf(rank);
+    if (col === -1 || row === -1) return null;
+    return { row, col };
+  }
+
+  function coordsToSquare(row, col) {
+    if (row < 0 || row > 7 || col < 0 || col > 7) return null;
+    return FILES[col] + RANKS[row];
+  }
+
+  function squareToWorld(square) {
+    const coords = squareToCoords(square);
+    if (!coords) return new THREE.Vector3(0, 0, 0);
+    // col 0 ('a') -> -3.5, col 7 ('h') -> +3.5
+    // row 0 ('8') -> -3.5, row 7 ('1') -> +3.5
+    return new THREE.Vector3(-3.5 + coords.col, 0, -3.5 + coords.row);
+  }
+
+  function worldToSquare(x, z) {
+    const col = Math.round(x + 3.5);
+    const row = Math.round(z + 3.5);
+    return coordsToSquare(row, col);
+  }
+
+  // Easing functions
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+  function easeOutQuad(t) {
+    return 1 - (1 - t) * (1 - t);
+  }
+
+  // Procedural Canvas Texture Generator for Board Themes
+  const TextureCache = {};
+
+  function generateThemeTextures(theme) {
+    if (TextureCache[theme]) return TextureCache[theme];
+
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    let lightColor, darkColor, frameColor, tableColor;
+
+    if (theme === 'wood') {
+      lightColor = '#e2c59b';
+      darkColor = '#703d1e';
+      frameColor = '#3c1d0e';
+      tableColor = '#18120e';
+    } else if (theme === 'marble') {
+      lightColor = '#f5f6f8';
+      darkColor = '#1e2126';
+      frameColor = '#111317';
+      tableColor = '#0b0d10';
+    } else if (theme === 'neon') {
+      lightColor = '#0d1829';
+      darkColor = '#1b0d2a';
+      frameColor = '#07090e';
+      tableColor = '#020306';
+    } else {
+      // Classic: Clean, high-contrast Matte Black & White
+      lightColor = '#f2f4f7'; // clean soft pure white
+      darkColor = '#262a32';  // deep charcoal/slate black
+      frameColor = '#181a20'; // sleek dark anthracite
+      tableColor = '#0f1115';
+    }
+
+    function createSquareTexture(baseColor, isLight, type) {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const g = c.getContext('2d');
+      g.fillStyle = baseColor;
+      g.fillRect(0, 0, 256, 256);
+
+      if (type === 'wood') {
+        // Wood grain rings & subtle stripes
+        g.fillStyle = isLight ? 'rgba(160, 110, 60, 0.08)' : 'rgba(40, 20, 10, 0.15)';
+        for (let i = 0; i < 20; i++) {
+          const y = (i * 13) % 256;
+          g.fillRect(0, y, 256, 3 + (i % 4));
+        }
+        g.strokeStyle = isLight ? 'rgba(120, 80, 40, 0.05)' : 'rgba(0, 0, 0, 0.12)';
+        g.lineWidth = 1.5;
+        for (let i = 0; i < 8; i++) {
+          g.beginPath();
+          g.arc(128, -50 + i * 40, 100 + i * 20, 0, Math.PI * 2);
+          g.stroke();
+        }
+      } else if (type === 'marble') {
+        // Subtle marble veins
+        g.strokeStyle = isLight ? 'rgba(100, 115, 130, 0.12)' : 'rgba(240, 245, 255, 0.14)';
+        g.lineWidth = 1.2;
+        for (let v = 0; v < 4; v++) {
+          g.beginPath();
+          let x = (v * 70) % 256;
+          let y = 0;
+          g.moveTo(x, y);
+          while (y < 256) {
+            x += (Math.random() - 0.48) * 14;
+            y += 8 + Math.random() * 10;
+            g.lineTo(x, y);
+          }
+          g.stroke();
+        }
+      } else if (type === 'neon') {
+        // Cyber grid & glowing edge
+        const glowColor = isLight ? '#00e5ff' : '#d500f9';
+        g.strokeStyle = glowColor;
+        g.lineWidth = 3;
+        g.strokeRect(2, 2, 252, 252);
+        g.fillStyle = isLight ? 'rgba(0, 229, 255, 0.04)' : 'rgba(213, 0, 249, 0.04)';
+        g.fillRect(4, 4, 248, 248);
+      } else {
+        // Classic: Completely clean, uniform matte surface without noisy gradients
+        g.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.04)';
+        g.lineWidth = 1;
+        g.strokeRect(0, 0, 256, 256);
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.ClampToEdgeWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      return tex;
+    }
+
+    const lightTex = createSquareTexture(lightColor, true, theme);
+    const darkTex = createSquareTexture(darkColor, false, theme);
+
+    // Frame Texture
+    const frameCanvas = document.createElement('canvas');
+    frameCanvas.width = 512;
+    frameCanvas.height = 512;
+    const fctx = frameCanvas.getContext('2d');
+    fctx.fillStyle = frameColor;
+    fctx.fillRect(0, 0, 512, 512);
+
+    if (theme === 'wood') {
+      fctx.fillStyle = 'rgba(20, 8, 3, 0.2)';
+      for (let i = 0; i < 40; i++) {
+        fctx.fillRect(0, i * 13, 512, 4);
+      }
+    } else if (theme === 'marble') {
+      fctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      fctx.lineWidth = 2;
+      for (let i = 0; i < 6; i++) {
+        fctx.beginPath();
+        fctx.moveTo(i * 90, 0);
+        fctx.lineTo(i * 90 + 60, 512);
+        fctx.stroke();
+      }
+    } else if (theme === 'neon') {
+      fctx.strokeStyle = '#00e5ff';
+      fctx.lineWidth = 4;
+      fctx.strokeRect(4, 4, 504, 504);
+      fctx.strokeStyle = '#d500f9';
+      fctx.strokeRect(12, 12, 488, 488);
+    } else {
+      // Classic: Dark anthracite matte frame
+      fctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      fctx.fillRect(0, 0, 512, 512);
+    }
+    const frameTex = new THREE.CanvasTexture(frameCanvas);
+
+    TextureCache[theme] = {
+      lightColor,
+      darkColor,
+      frameColor,
+      tableColor,
+      lightTex,
+      darkTex,
+      frameTex
+    };
+    return TextureCache[theme];
+  }
+
+  // Fallback Procedural Staunton Chess Piece Mesh Generator
+  // Used whenever window.ChessPieces3D is not yet available.
+  function createFallbackPieceMesh(type, color, theme) {
+    const group = new THREE.Group();
+    group.name = `piece_${color}_${type}`;
+
+    let primaryColor, roughness, metalness;
+    if (theme === 'neon') {
+      primaryColor = color === 'w' ? 0x00f0ff : 0xff007f;
+      roughness = 0.2;
+      metalness = 0.8;
+    } else if (theme === 'wood') {
+      primaryColor = color === 'w' ? 0xdeb887 : 0x5a2d14;
+      roughness = 0.45;
+      metalness = 0.05;
+    } else if (theme === 'marble') {
+      primaryColor = color === 'w' ? 0xf0f2f5 : 0x22252a;
+      roughness = 0.18;
+      metalness = 0.1;
+    } else {
+      // Classic: Crisp Ivory White vs Deep Obsidian Black
+      primaryColor = color === 'w' ? 0xfbfaf5 : 0x14161b;
+      roughness = color === 'w' ? 0.35 : 0.32;
+      metalness = color === 'w' ? 0.02 : 0.08;
+    }
+
+    const material = new THREE.MeshStandardMaterial({
+      color: primaryColor,
+      roughness: roughness,
+      metalness: metalness
+    });
+
+    if (theme === 'neon') {
+      material.emissive = new THREE.Color(color === 'w' ? 0x005577 : 0x770044);
+      material.emissiveIntensity = 0.4;
+    }
+
+    // Helper to add turned lathe/cylinder elements
+    function addPart(geo, y, rx = 0, ry = 0, rz = 0) {
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.position.y = y;
+      if (rx) mesh.rotation.x = rx;
+      if (ry) mesh.rotation.y = ry;
+      if (rz) mesh.rotation.z = rz;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      return mesh;
+    }
+
+    // Base pedestal for all pieces
+    addPart(new THREE.CylinderGeometry(0.38, 0.42, 0.12, 24), 0.06);
+    addPart(new THREE.CylinderGeometry(0.32, 0.38, 0.08, 24), 0.15);
+
+    if (type === 'p') {
+      // Pawn
+      addPart(new THREE.CylinderGeometry(0.18, 0.30, 0.45, 20), 0.40);
+      addPart(new THREE.TorusGeometry(0.20, 0.04, 12, 24), 0.64, Math.PI / 2);
+      addPart(new THREE.SphereGeometry(0.20, 20, 16), 0.82);
+    } else if (type === 'r') {
+      // Rook
+      addPart(new THREE.CylinderGeometry(0.24, 0.32, 0.65, 20), 0.48);
+      addPart(new THREE.CylinderGeometry(0.32, 0.26, 0.20, 20), 0.88);
+      // Castle battlements (crenellations)
+      for (let i = 0; i < 4; i++) {
+        const angle = (i * Math.PI) / 2;
+        const b = addPart(new THREE.BoxGeometry(0.12, 0.12, 0.12), 1.02);
+        b.position.x = Math.cos(angle) * 0.22;
+        b.position.z = Math.sin(angle) * 0.22;
+      }
+    } else if (type === 'n') {
+      // Knight
+      addPart(new THREE.CylinderGeometry(0.24, 0.32, 0.38, 20), 0.35);
+      // Sculpted horse neck & head
+      const head = addPart(new THREE.BoxGeometry(0.26, 0.45, 0.36), 0.72);
+      head.rotation.x = -0.2;
+      const muzzle = addPart(new THREE.BoxGeometry(0.22, 0.22, 0.30), 0.65);
+      muzzle.position.z = 0.20;
+      // Ears
+      const ear1 = addPart(new THREE.ConeGeometry(0.06, 0.16, 8), 1.0);
+      ear1.position.set(-0.08, 0.98, -0.05);
+      const ear2 = addPart(new THREE.ConeGeometry(0.06, 0.16, 8), 1.0);
+      ear2.position.set(0.08, 0.98, -0.05);
+    } else if (type === 'b') {
+      // Bishop
+      addPart(new THREE.CylinderGeometry(0.20, 0.32, 0.65, 20), 0.50);
+      addPart(new THREE.TorusGeometry(0.22, 0.04, 12, 24), 0.82, Math.PI / 2);
+      addPart(new THREE.SphereGeometry(0.22, 20, 16), 1.04);
+      addPart(new THREE.SphereGeometry(0.06, 12, 10), 1.28);
+    } else if (type === 'q') {
+      // Queen
+      addPart(new THREE.CylinderGeometry(0.22, 0.34, 0.80, 20), 0.56);
+      addPart(new THREE.TorusGeometry(0.26, 0.04, 12, 24), 0.98, Math.PI / 2);
+      addPart(new THREE.CylinderGeometry(0.32, 0.22, 0.24, 20), 1.12);
+      // Coronet crown pearls
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4;
+        const pearl = addPart(new THREE.SphereGeometry(0.05, 10, 8), 1.26);
+        pearl.position.x = Math.cos(angle) * 0.28;
+        pearl.position.z = Math.sin(angle) * 0.28;
+      }
+      addPart(new THREE.SphereGeometry(0.09, 12, 10), 1.28);
+    } else if (type === 'k') {
+      // King
+      addPart(new THREE.CylinderGeometry(0.24, 0.36, 0.90, 20), 0.62);
+      addPart(new THREE.TorusGeometry(0.28, 0.05, 12, 24), 1.08, Math.PI / 2);
+      addPart(new THREE.CylinderGeometry(0.34, 0.24, 0.28, 20), 1.24);
+      // King's 3D Cross Finial
+      addPart(new THREE.BoxGeometry(0.08, 0.26, 0.08), 1.50);
+      addPart(new THREE.BoxGeometry(0.22, 0.08, 0.08), 1.54);
+    }
+
+    return group;
+  }
+
+  /**
+   * Main ChessScene3D Class
+   */
+  class ChessScene3D {
+    constructor(containerEl, callbacks = {}) {
+      if (!containerEl) {
+        throw new Error('ChessScene3D: containerEl is required.');
+      }
+      if (!THREE) {
+        THREE = (typeof window !== 'undefined' ? window.THREE : null) || (typeof globalThis !== 'undefined' ? globalThis.THREE : null);
+      }
+      if (!THREE) {
+        throw new Error('ChessScene3D: THREE (Three.js) is not loaded.');
+      }
+
+      this.containerEl = containerEl;
+      this.callbacks = Object.assign({
+        onSquareClick: () => {},
+        onPieceDrop: () => {}
+      }, callbacks);
+
+      // Config & State
+      this.theme = 'classic';
+      this.turn = 'w';
+      this.isFlipped = false;
+      this.squareSize = 1.0;
+
+      // Piece mesh registry: square string -> { mesh, type, color }
+      this.pieceMap = new Map();
+      this.activeAnimations = [];
+
+      // Camera Spherical State
+      this.cameraTarget = new THREE.Vector3(0, 0, 0);
+      this.cameraSpherical = {
+        radius: 12.0,
+        theta: 0.0, // White view is theta = 0 (z = +radius)
+        phi: Math.PI / 3.4
+      };
+      this.targetSpherical = {
+        radius: 12.0,
+        theta: 0.0,
+        phi: Math.PI / 3.4
+      };
+      this.minRadius = 4.5;
+      this.maxRadius = 24.0;
+      this.minPhi = 0.08;
+      this.maxPhi = Math.PI / 2.05;
+      this.dampingFactor = 0.09;
+
+      // Pointer / Raycasting interaction state
+      this.pointer = new THREE.Vector2();
+      this.raycaster = new THREE.Raycaster();
+      this.isPointerDown = false;
+      this.pointerDownPos = { x: 0, y: 0 };
+      this.pointerButton = 0;
+      this.draggedPiece = null; // { mesh, fromSquare, originalPos, planeIntersectOffset }
+      this.interactionPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.55); // y = 0.55
+      this.hoveredSquare = null;
+
+      // Highlights state
+      this.highlightGroup = new THREE.Group();
+      this.highlightMeshes = [];
+      this.checkPulseMesh = null;
+
+      // Scene & Renderer initialization
+      this.initScene();
+      this.initLights();
+      this.initBoard();
+      this.initHighlights();
+      this.initEvents();
+      this.startAnimationLoop();
+    }
+
+    /**
+     * Initializes Scene, Camera, and WebGLRenderer
+     */
+    initScene() {
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color(0x101216);
+
+      const width = this.containerEl.clientWidth || 800;
+      const height = this.containerEl.clientHeight || 600;
+
+      this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      this.updateCameraPosition(true);
+
+      this.renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance'
+      });
+      this.renderer.setSize(width, height);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      if (THREE.ACESFilmicToneMapping) {
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.05;
+      }
+      if (THREE.sRGBEncoding) {
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+      }
+
+      this.renderer.domElement.style.display = 'block';
+      this.renderer.domElement.style.width = '100%';
+      this.renderer.domElement.style.height = '100%';
+      this.renderer.domElement.style.outline = 'none';
+      this.renderer.domElement.style.touchAction = 'none';
+
+      // Clear container and append canvas
+      this.containerEl.innerHTML = '';
+      this.containerEl.appendChild(this.renderer.domElement);
+    }
+
+    /**
+     * Initializes shadow-casting directional, ambient, and accent lights
+     */
+    initLights() {
+      this.lightsGroup = new THREE.Group();
+      this.scene.add(this.lightsGroup);
+
+      // Ambient Light
+      this.ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+      this.lightsGroup.add(this.ambientLight);
+
+      // Hemisphere Light (sky/ground color contrast)
+      this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x333344, 0.35);
+      this.hemiLight.position.set(0, 20, 0);
+      this.lightsGroup.add(this.hemiLight);
+
+      // Key Directional Light (Soft, glare-free illumination, casts crisp shadows)
+      this.mainDirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+      this.mainDirLight.position.set(5, 16, 8);
+      this.mainDirLight.castShadow = true;
+      this.mainDirLight.shadow.mapSize.width = 2048;
+      this.mainDirLight.shadow.mapSize.height = 2048;
+      this.mainDirLight.shadow.camera.near = 1.0;
+      this.mainDirLight.shadow.camera.far = 35.0;
+      this.mainDirLight.shadow.camera.left = -6.5;
+      this.mainDirLight.shadow.camera.right = 6.5;
+      this.mainDirLight.shadow.camera.top = 6.5;
+      this.mainDirLight.shadow.camera.bottom = -6.5;
+      this.mainDirLight.shadow.bias = -0.0003;
+      this.mainDirLight.shadow.normalBias = 0.02;
+      this.lightsGroup.add(this.mainDirLight);
+
+      // Rim / Fill Directional Light (opposite side for 3D depth)
+      this.rimDirLight = new THREE.DirectionalLight(0xddeeff, 0.45);
+      this.rimDirLight.position.set(-6, 10, -7);
+      this.lightsGroup.add(this.rimDirLight);
+
+      // Subtle Neon Accent Lights (only active when theme === 'neon')
+      this.neonCyanLight = new THREE.PointLight(0x00f0ff, 0, 15);
+      this.neonCyanLight.position.set(-5, 4, 5);
+      this.lightsGroup.add(this.neonCyanLight);
+
+      this.neonPinkLight = new THREE.PointLight(0xff00bb, 0, 15);
+      this.neonPinkLight.position.set(5, 4, -5);
+      this.lightsGroup.add(this.neonPinkLight);
+    }
+
+    /**
+     * Builds the 3D 8x8 Board, wooden/marble bevel frame, and algebraic coordinate labels
+     */
+    initBoard() {
+      this.boardGroup = new THREE.Group();
+      this.scene.add(this.boardGroup);
+
+      this.squareMeshes = []; // Array of individual square meshes for raycasting
+      this.squareMap = {};    // square string -> square mesh
+
+      const textures = generateThemeTextures(this.theme);
+
+      // Materials for squares - Matte surface (roughness: 0.85, metalness: 0.02) to eliminate specular glare
+      this.lightSquareMat = new THREE.MeshStandardMaterial({
+        map: textures.lightTex,
+        roughness: 0.85,
+        metalness: 0.02
+      });
+      this.darkSquareMat = new THREE.MeshStandardMaterial({
+        map: textures.darkTex,
+        roughness: 0.85,
+        metalness: 0.02
+      });
+
+      // Individual 64 board squares: 1.0 width, 0.16 height, 1.0 depth at y = -0.08
+      // Top face is cleanly and exactly at y = 0.000 with zero gaps
+      const squareGeo = new THREE.BoxGeometry(1.0, 0.16, 1.0);
+
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const square = coordsToSquare(row, col);
+          const isLight = (row + col) % 2 === 0;
+
+          const mesh = new THREE.Mesh(
+            squareGeo,
+            isLight ? this.lightSquareMat : this.darkSquareMat
+          );
+          mesh.position.set(-3.5 + col, -0.08, -3.5 + row);
+          mesh.receiveShadow = true;
+          mesh.userData = { square, row, col, isLight, isBoardSquare: true };
+
+          this.boardGroup.add(mesh);
+          this.squareMeshes.push(mesh);
+          this.squareMap[square] = mesh;
+        }
+      }
+
+      // Board Frame / Border: Top face at y = -0.025 (25mm below square tops, zero Z-fighting)
+      this.frameMat = new THREE.MeshStandardMaterial({
+        map: textures.frameTex,
+        roughness: 0.5,
+        metalness: 0.08
+      });
+
+      // Outer frame base
+      const frameBaseGeo = new THREE.BoxGeometry(9.6, 0.32, 9.6);
+      this.frameBaseMesh = new THREE.Mesh(frameBaseGeo, this.frameMat);
+      this.frameBaseMesh.position.y = -0.185;
+      this.frameBaseMesh.receiveShadow = true;
+      this.boardGroup.add(this.frameBaseMesh);
+
+      // Beveled Border trim around the 8x8 squares: Top face at y = -0.015
+      const trimGeo = new THREE.BoxGeometry(8.12, 0.24, 8.12);
+      this.trimMat = new THREE.MeshStandardMaterial({
+        color: 0x111114,
+        roughness: 0.85,
+        metalness: 0.05
+      });
+      const trimMesh = new THREE.Mesh(trimGeo, this.trimMat);
+      trimMesh.position.y = -0.135;
+      this.boardGroup.add(trimMesh);
+
+      // Outer subtle matte inlay line: Top face at y = -0.020
+      const inlayGeo = new THREE.BoxGeometry(8.22, 0.24, 8.22);
+      this.inlayMat = new THREE.MeshStandardMaterial({
+        color: 0x475569, // subtle matte slate, no blinding metallic gold
+        roughness: 0.60,
+        metalness: 0.20
+      });
+      this.inlayMesh = new THREE.Mesh(inlayGeo, this.inlayMat);
+      this.inlayMesh.position.y = -0.140;
+      this.boardGroup.add(this.inlayMesh);
+
+      // Coordinate Labels (a-h and 1-8 on the wooden/marble board frame)
+      this.labelsGroup = new THREE.Group();
+      this.boardGroup.add(this.labelsGroup);
+      this.buildCoordinateLabels();
+
+      // Ground Table / Pedestal below the board
+      const tableGeo = new THREE.CylinderGeometry(14, 14, 0.6, 64);
+      this.tableMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(textures.tableColor),
+        roughness: 0.6,
+        metalness: 0.1
+      });
+      this.tableMesh = new THREE.Mesh(tableGeo, this.tableMat);
+      this.tableMesh.position.y = -0.64;
+      this.tableMesh.receiveShadow = true;
+      this.boardGroup.add(this.tableMesh);
+
+      // Master pieces container group
+      this.piecesGroup = new THREE.Group();
+      this.boardGroup.add(this.piecesGroup);
+    }
+
+    /**
+     * Builds algebraic coordinate labels a-h and 1-8 on the frame
+     */
+    buildCoordinateLabels() {
+      // Clear any previous labels
+      while (this.labelsGroup.children.length > 0) {
+        const child = this.labelsGroup.children[0];
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+        if (child.geometry) child.geometry.dispose();
+        this.labelsGroup.remove(child);
+      }
+
+      let textColor = '#cbd5e1';
+      if (this.theme === 'marble') textColor = '#94a3b8';
+      else if (this.theme === 'neon') textColor = '#00f0ff';
+      else if (this.theme === 'wood') textColor = '#ecc48d';
+
+      function makeLabelTexture(char) {
+        const c = document.createElement('canvas');
+        c.width = 128;
+        c.height = 128;
+        const g = c.getContext('2d');
+        g.clearRect(0, 0, 128, 128);
+        g.font = 'bold 76px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillStyle = textColor;
+        g.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        g.shadowBlur = 8;
+        g.fillText(char, 64, 64);
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        return tex;
+      }
+
+      const labelPlaneGeo = new THREE.PlaneGeometry(0.48, 0.48);
+
+      // Files 'a'-'h' along south (z = 4.42) facing White
+      for (let col = 0; col < 8; col++) {
+        const tex = makeLabelTexture(FILES[col]);
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1
+        });
+        const mesh = new THREE.Mesh(labelPlaneGeo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(-3.5 + col, -0.021, 4.42);
+        this.labelsGroup.add(mesh);
+      }
+
+      // Files 'a'-'h' along north (z = -4.42) facing Black (rotated 180 deg)
+      for (let col = 0; col < 8; col++) {
+        const tex = makeLabelTexture(FILES[col]);
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1
+        });
+        const mesh = new THREE.Mesh(labelPlaneGeo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.rotation.z = Math.PI;
+        mesh.position.set(-3.5 + col, -0.021, -4.42);
+        this.labelsGroup.add(mesh);
+      }
+
+      // Ranks '1'-'8' along west (x = -4.42)
+      for (let row = 0; row < 8; row++) {
+        const rankChar = RANKS[row];
+        const tex = makeLabelTexture(rankChar);
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1
+        });
+        const mesh = new THREE.Mesh(labelPlaneGeo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.rotation.z = Math.PI / 2;
+        mesh.position.set(-4.42, -0.021, -3.5 + row);
+        this.labelsGroup.add(mesh);
+      }
+
+      // Ranks '1'-'8' along east (x = +4.42)
+      for (let row = 0; row < 8; row++) {
+        const rankChar = RANKS[row];
+        const tex = makeLabelTexture(rankChar);
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1
+        });
+        const mesh = new THREE.Mesh(labelPlaneGeo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.rotation.z = -Math.PI / 2;
+        mesh.position.set(4.42, -0.021, -3.5 + row);
+        this.labelsGroup.add(mesh);
+      }
+    }
+
+    /**
+     * Initializes Highlight container group
+     */
+    initHighlights() {
+      this.boardGroup.add(this.highlightGroup);
+    }
+
+    /**
+     * Highlights squares according to state:
+     * @param {Object} options
+     *   - selected: 'e2'
+     *   - legalMoves: ['e3', 'e4'] or [{ to: 'e4', captured: true }]
+     *   - lastMove: { from: 'e2', to: 'e4' } or ['e2', 'e4']
+     *   - checkSquare: 'e1'
+     */
+    highlightSquares(options = {}) {
+      this.clearHighlights();
+
+      const { selected, legalMoves, lastMove, checkSquare } = options;
+
+      // 1. Last Move highlights (soft warm yellow / cyan glow on from & to)
+      if (lastMove) {
+        const fromSquare = typeof lastMove === 'object' && lastMove.from ? lastMove.from : (Array.isArray(lastMove) ? lastMove[0] : null);
+        const toSquare = typeof lastMove === 'object' && lastMove.to ? lastMove.to : (Array.isArray(lastMove) ? lastMove[1] : null);
+
+        if (fromSquare) this.createSquareHighlight(fromSquare, 0xfacc15, 0.32, 'fill');
+        if (toSquare) this.createSquareHighlight(toSquare, 0xfacc15, 0.40, 'fill');
+      }
+
+      // 2. Selected Square highlight (amber / emerald glowing border & fill)
+      if (selected) {
+        this.createSquareHighlight(selected, 0x10b981, 0.45, 'selected');
+      }
+
+      // 3. Legal Moves (dots for empty squares, brackets/rings for captures)
+      if (Array.isArray(legalMoves)) {
+        for (const move of legalMoves) {
+          const targetSquare = typeof move === 'string' ? move : move.to;
+          if (!targetSquare) continue;
+
+          // Check if square is occupied
+          const isCapture = this.pieceMap.has(targetSquare) || (move.flags && move.flags.capture);
+
+          if (isCapture) {
+            this.createCaptureMarker(targetSquare);
+          } else {
+            this.createMoveDotMarker(targetSquare);
+          }
+        }
+      }
+
+      // 4. Check Square (pulsing danger red aura under the king)
+      if (checkSquare) {
+        this.createCheckMarker(checkSquare);
+      }
+    }
+
+    /**
+     * Clears all active highlights
+     */
+    clearHighlights() {
+      while (this.highlightGroup.children.length > 0) {
+        const child = this.highlightGroup.children[0];
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+        if (child.geometry) child.geometry.dispose();
+        this.highlightGroup.remove(child);
+      }
+      this.highlightMeshes = [];
+      this.checkPulseMesh = null;
+    }
+
+    createSquareHighlight(square, hexColor, opacity = 0.4, type = 'fill') {
+      const pos = squareToWorld(square);
+      const group = new THREE.Group();
+      // y = 0.005 for selected, y = 0.003 for lastMove
+      const yPos = type === 'selected' ? 0.005 : 0.003;
+      group.position.set(pos.x, yPos, pos.z);
+
+      const fillGeo = new THREE.PlaneGeometry(0.96, 0.96);
+      const fillMat = new THREE.MeshBasicMaterial({
+        color: hexColor,
+        transparent: true,
+        opacity: opacity,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+      const fillMesh = new THREE.Mesh(fillGeo, fillMat);
+      fillMesh.rotation.x = -Math.PI / 2;
+      group.add(fillMesh);
+
+      if (type === 'selected') {
+        // Glowing perimeter border
+        const edges = new THREE.EdgesGeometry(fillGeo);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: hexColor,
+          linewidth: 2,
+          transparent: true,
+          opacity: 0.95,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1
+        });
+        const borderMesh = new THREE.LineSegments(edges, lineMat);
+        borderMesh.rotation.x = -Math.PI / 2;
+        group.add(borderMesh);
+      }
+
+      this.highlightGroup.add(group);
+      this.highlightMeshes.push(group);
+      return group;
+    }
+
+    createMoveDotMarker(square) {
+      const pos = squareToWorld(square);
+      const dotGeo = new THREE.CircleGeometry(0.16, 24);
+      const dotMat = new THREE.MeshBasicMaterial({
+        color: 0x10b981,
+        transparent: true,
+        opacity: 0.75,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+      const dot = new THREE.Mesh(dotGeo, dotMat);
+      dot.rotation.x = -Math.PI / 2;
+      dot.position.set(pos.x, 0.007, pos.z);
+
+      this.highlightGroup.add(dot);
+      this.highlightMeshes.push(dot);
+      return dot;
+    }
+
+    createCaptureMarker(square) {
+      const pos = squareToWorld(square);
+      // Sleek hollow ring hugging the piece base at y = 0.007
+      const ringGeo = new THREE.RingGeometry(0.36, 0.46, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xef4444,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(pos.x, 0.007, pos.z);
+
+      this.highlightGroup.add(ring);
+      this.highlightMeshes.push(ring);
+      return ring;
+    }
+
+    createCheckMarker(square) {
+      const pos = squareToWorld(square);
+      const checkGeo = new THREE.RingGeometry(0.20, 0.48, 32);
+      const checkMat = new THREE.MeshBasicMaterial({
+        color: 0xff0033,
+        transparent: true,
+        opacity: 0.75,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+      const checkMesh = new THREE.Mesh(checkGeo, checkMat);
+      checkMesh.rotation.x = -Math.PI / 2;
+      checkMesh.position.set(pos.x, 0.006, pos.z);
+
+      this.highlightGroup.add(checkMesh);
+      this.highlightMeshes.push(checkMesh);
+      this.checkPulseMesh = checkMesh;
+      return checkMesh;
+    }
+
+    /**
+     * Instantiates a piece mesh using window.ChessPieces3D or fallback
+     */
+    createPieceMesh(type, color) {
+      if (window.ChessPieces3D && typeof window.ChessPieces3D.createPieceMesh === 'function') {
+        const mesh = window.ChessPieces3D.createPieceMesh(type, color, this.theme);
+        if (mesh) {
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          return mesh;
+        }
+      }
+      return createFallbackPieceMesh(type, color, this.theme);
+    }
+
+    /**
+     * Synchronizes 3D pieces with the engine 8x8 board representation and plays smooth animations:
+     * - Sliding pieces
+     * - Parabolic jump arc for Knights
+     * - Simultaneous Rook movement for Castling
+     * - Disappearing captured pieces
+     * - Pawn promotions
+     *
+     * @param {Array<Array>} board - 8x8 array (row 0=rank 8, row 7=rank 1; col 0=file 'a', col 7=file 'h')
+     * @param {Object} lastMove - { from: 'e2', to: 'e4', piece: 'p', rookMove: { from, to }, ... }
+     */
+    syncBoard(board, lastMove = null) {
+      if (!Array.isArray(board)) return;
+
+      // Extract move details if provided
+      const fromSquare = lastMove ? (lastMove.from || null) : null;
+      const toSquare = lastMove ? (lastMove.to || null) : null;
+      const movingPieceType = lastMove ? (lastMove.piece || null) : null;
+      const rookMove = lastMove ? (lastMove.rookMove || null) : null;
+
+      // Check if this was a castling move without explicit rookMove provided
+      let castleRookMove = rookMove;
+      if (!castleRookMove && fromSquare && toSquare) {
+        if (fromSquare === 'e1' && toSquare === 'g1') castleRookMove = { from: 'h1', to: 'f1' };
+        else if (fromSquare === 'e1' && toSquare === 'c1') castleRookMove = { from: 'a1', to: 'd1' };
+        else if (fromSquare === 'e8' && toSquare === 'g8') castleRookMove = { from: 'h8', to: 'f8' };
+        else if (fromSquare === 'e8' && toSquare === 'c8') castleRookMove = { from: 'a8', to: 'd8' };
+      }
+
+      // Detect captured piece
+      let capturedMesh = null;
+      if (toSquare && this.pieceMap.has(toSquare) && this.pieceMap.get(toSquare).mesh !== this.draggedPiece?.mesh) {
+        capturedMesh = this.pieceMap.get(toSquare).mesh;
+      }
+
+      // Handle animated move
+      const animatedSquares = new Set();
+
+      if (fromSquare && toSquare && this.pieceMap.has(fromSquare)) {
+        const pieceEntry = this.pieceMap.get(fromSquare);
+        const mesh = pieceEntry.mesh;
+        const fromPos = squareToWorld(fromSquare);
+        const toPos = squareToWorld(toSquare);
+        const isKnight = pieceEntry.type === 'n' || movingPieceType === 'n';
+
+        // Animate main piece
+        this.animatePieceMove({
+          mesh: mesh,
+          fromPos: fromPos,
+          toPos: toPos,
+          isKnight: isKnight,
+          duration: isKnight ? 380 : 280,
+          onComplete: () => {
+            mesh.position.copy(toPos);
+            // Handle promotion visual update
+            if (lastMove && lastMove.promotion) {
+              this.replaceWithPromotedPiece(toSquare, lastMove.promotion, pieceEntry.color);
+            }
+          }
+        });
+
+        // Update pieceMap registration
+        this.pieceMap.delete(fromSquare);
+        this.pieceMap.set(toSquare, pieceEntry);
+        animatedSquares.add(fromSquare);
+        animatedSquares.add(toSquare);
+
+        // Animate simultaneous castling rook if applicable
+        if (castleRookMove && this.pieceMap.has(castleRookMove.from)) {
+          const rookEntry = this.pieceMap.get(castleRookMove.from);
+          const rookFromPos = squareToWorld(castleRookMove.from);
+          const rookToPos = squareToWorld(castleRookMove.to);
+
+          this.animatePieceMove({
+            mesh: rookEntry.mesh,
+            fromPos: rookFromPos,
+            toPos: rookToPos,
+            isKnight: false,
+            duration: 280,
+            onComplete: () => {
+              rookEntry.mesh.position.copy(rookToPos);
+            }
+          });
+
+          this.pieceMap.delete(castleRookMove.from);
+          this.pieceMap.set(castleRookMove.to, rookEntry);
+          animatedSquares.add(castleRookMove.from);
+          animatedSquares.add(castleRookMove.to);
+        }
+
+        // Animate capture dissolution
+        if (capturedMesh) {
+          this.animateCaptureDissolve(capturedMesh);
+        }
+      }
+
+      // Synchronize the full board state
+      const targetMap = new Map(); // square -> { type, color }
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const piece = board[row][col];
+          if (piece) {
+            const sq = coordsToSquare(row, col);
+            targetMap.set(sq, { type: piece.type, color: piece.color });
+          }
+        }
+      }
+
+      // Remove pieces no longer on board (that are not currently animating)
+      for (const [sq, entry] of this.pieceMap.entries()) {
+        if (!targetMap.has(sq) && !animatedSquares.has(sq)) {
+          this.piecesGroup.remove(entry.mesh);
+          this.disposeObject(entry.mesh);
+          this.pieceMap.delete(sq);
+        }
+      }
+
+      // Add or update pieces
+      for (const [sq, target] of targetMap.entries()) {
+        if (animatedSquares.has(sq)) continue;
+
+        const existing = this.pieceMap.get(sq);
+        if (existing && existing.type === target.type && existing.color === target.color) {
+          // Exactly matches, verify position
+          const worldPos = squareToWorld(sq);
+          existing.mesh.position.set(worldPos.x, 0, worldPos.z);
+        } else {
+          // Replace or create piece
+          if (existing) {
+            this.piecesGroup.remove(existing.mesh);
+            this.disposeObject(existing.mesh);
+            this.pieceMap.delete(sq);
+          }
+
+          const newMesh = this.createPieceMesh(target.type, target.color);
+          const worldPos = squareToWorld(sq);
+          newMesh.position.set(worldPos.x, 0, worldPos.z);
+          newMesh.userData = { square: sq, type: target.type, color: target.color };
+
+          this.piecesGroup.add(newMesh);
+          this.pieceMap.set(sq, {
+            mesh: newMesh,
+            type: target.type,
+            color: target.color
+          });
+        }
+      }
+    }
+
+    /**
+     * Executes smooth piece movement animation (sliding or knight parabolic arc)
+     */
+    animatePieceMove({ mesh, fromPos, toPos, isKnight, duration = 300, onComplete = null }) {
+      const startTime = performance.now();
+      const arcHeight = isKnight ? 1.25 : 0.0;
+
+      const animation = {
+        mesh,
+        fromPos: fromPos.clone(),
+        toPos: toPos.clone(),
+        isKnight,
+        arcHeight,
+        startTime,
+        duration,
+        onComplete,
+        update: (now) => {
+          const elapsed = now - startTime;
+          const t = Math.min(elapsed / duration, 1.0);
+          const easeT = isKnight ? t : easeOutCubic(t);
+
+          mesh.position.x = fromPos.x + (toPos.x - fromPos.x) * easeT;
+          mesh.position.z = fromPos.z + (toPos.z - fromPos.z) * easeT;
+
+          if (isKnight) {
+            // Parabolic jump arc: 4 * h * t * (1 - t)
+            mesh.position.y = 4 * arcHeight * t * (1 - t);
+            mesh.rotation.x = Math.sin((t - 0.5) * Math.PI) * 0.15;
+          } else {
+            // Subtle glide lift to prevent clipping
+            mesh.position.y = Math.sin(t * Math.PI) * 0.12;
+          }
+
+          if (t >= 1.0) {
+            mesh.position.copy(toPos);
+            if (isKnight) mesh.rotation.x = 0;
+            if (onComplete) onComplete();
+            return true; // Finished
+          }
+          return false;
+        }
+      };
+
+      this.activeAnimations.push(animation);
+    }
+
+    /**
+     * Smoothly shrinks and lifts a captured piece before disposing
+     */
+    animateCaptureDissolve(mesh) {
+      const startTime = performance.now();
+      const startScale = mesh.scale.clone();
+      const duration = 240;
+
+      const anim = {
+        update: (now) => {
+          const t = Math.min((now - startTime) / duration, 1.0);
+          const scaleFactor = 1.0 - easeOutQuad(t);
+          mesh.scale.set(startScale.x * scaleFactor, startScale.y * scaleFactor, startScale.z * scaleFactor);
+          mesh.position.y += 0.015;
+
+          if (t >= 1.0) {
+            this.piecesGroup.remove(mesh);
+            this.disposeObject(mesh);
+            return true;
+          }
+          return false;
+        }
+      };
+      this.activeAnimations.push(anim);
+    }
+
+    /**
+     * Replaces a pawn with the promoted piece
+     */
+    replaceWithPromotedPiece(square, newType, color) {
+      const existing = this.pieceMap.get(square);
+      if (existing) {
+        this.piecesGroup.remove(existing.mesh);
+        this.disposeObject(existing.mesh);
+      }
+
+      const promotedMesh = this.createPieceMesh(newType, color);
+      const pos = squareToWorld(square);
+      promotedMesh.position.set(pos.x, 0, pos.z);
+      promotedMesh.scale.set(0.1, 0.1, 0.1);
+
+      this.piecesGroup.add(promotedMesh);
+      this.pieceMap.set(square, {
+        mesh: promotedMesh,
+        type: newType,
+        color: color
+      });
+
+      // Quick scale pop animation
+      const startTime = performance.now();
+      const popAnim = {
+        update: (now) => {
+          const t = Math.min((now - startTime) / 180, 1.0);
+          const s = easeOutCubic(t);
+          promotedMesh.scale.set(s, s, s);
+          return t >= 1.0;
+        }
+      };
+      this.activeAnimations.push(popAnim);
+    }
+
+    /**
+     * Switches the board and piece visual theme: 'classic', 'marble', 'neon', 'wood'
+     */
+    setTheme(themeName) {
+      if (!['classic', 'marble', 'neon', 'wood'].includes(themeName)) {
+        console.warn(`ChessScene3D: Theme "${themeName}" not recognized. Using classic.`);
+        themeName = 'classic';
+      }
+      this.theme = themeName;
+
+      // Update textures
+      const textures = generateThemeTextures(themeName);
+      this.lightSquareMat.map = textures.lightTex;
+      this.lightSquareMat.needsUpdate = true;
+      this.darkSquareMat.map = textures.darkTex;
+      this.darkSquareMat.needsUpdate = true;
+
+      this.frameMat.map = textures.frameTex;
+      this.frameMat.needsUpdate = true;
+
+      this.tableMat.color.set(textures.tableColor);
+      this.tableMat.needsUpdate = true;
+
+      // Update coordinate label colors
+      this.buildCoordinateLabels();
+
+      // Update lighting palette
+      if (themeName === 'neon') {
+        this.ambientLight.intensity = 0.35;
+        this.mainDirLight.color.set(0x00f0ff);
+        this.mainDirLight.intensity = 0.9;
+        this.rimDirLight.color.set(0xff00bb);
+        this.rimDirLight.intensity = 0.8;
+        this.neonCyanLight.intensity = 1.2;
+        this.neonPinkLight.intensity = 1.2;
+        this.scene.background.set(0x04060a);
+        this.inlayMat.color.set(0x00e5ff);
+      } else if (themeName === 'wood') {
+        this.ambientLight.intensity = 0.65;
+        this.mainDirLight.color.set(0xffe8cc);
+        this.mainDirLight.intensity = 1.2;
+        this.rimDirLight.color.set(0xffd2a6);
+        this.rimDirLight.intensity = 0.4;
+        this.neonCyanLight.intensity = 0;
+        this.neonPinkLight.intensity = 0;
+        this.scene.background.set(0x120d09);
+        this.inlayMat.color.set(0x3a1e0b);
+      } else if (themeName === 'marble') {
+        this.ambientLight.intensity = 0.7;
+        this.mainDirLight.color.set(0xf5f8ff);
+        this.mainDirLight.intensity = 1.15;
+        this.rimDirLight.color.set(0xd0e0ff);
+        this.rimDirLight.intensity = 0.5;
+        this.neonCyanLight.intensity = 0;
+        this.neonPinkLight.intensity = 0;
+        this.scene.background.set(0x0a0c10);
+        this.inlayMat.color.set(0x94a3b8);
+      } else {
+        // Classic: Clean, glare-free matte B&W
+        this.ambientLight.intensity = 0.65;
+        this.mainDirLight.color.set(0xffffff);
+        this.mainDirLight.intensity = 0.85;
+        this.rimDirLight.color.set(0xddeeff);
+        this.rimDirLight.intensity = 0.45;
+        this.neonCyanLight.intensity = 0;
+        this.neonPinkLight.intensity = 0;
+        this.scene.background.set(0x101216);
+        this.inlayMat.color.set(0x475569);
+        this.lightSquareMat.roughness = 0.85;
+        this.lightSquareMat.metalness = 0.02;
+        this.darkSquareMat.roughness = 0.85;
+        this.darkSquareMat.metalness = 0.02;
+      }
+
+      // Notify window.ChessPieces3D if supported
+      if (window.ChessPieces3D && typeof window.ChessPieces3D.setTheme === 'function') {
+        window.ChessPieces3D.setTheme(themeName);
+      }
+
+      // Re-render pieces with the new theme
+      for (const [sq, entry] of this.pieceMap.entries()) {
+        if (window.ChessPieces3D && typeof window.ChessPieces3D.updatePieceTheme === 'function') {
+          window.ChessPieces3D.updatePieceTheme(entry.mesh, themeName);
+        } else {
+          const oldMesh = entry.mesh;
+          const newMesh = this.createPieceMesh(entry.type, entry.color);
+          newMesh.position.copy(oldMesh.position);
+          newMesh.rotation.copy(oldMesh.rotation);
+          newMesh.scale.copy(oldMesh.scale);
+          newMesh.userData = { square: sq, type: entry.type, color: entry.color };
+
+          this.piecesGroup.remove(oldMesh);
+          this.disposeObject(oldMesh);
+          this.piecesGroup.add(newMesh);
+          entry.mesh = newMesh;
+        }
+      }
+    }
+
+    /**
+     * Preset Camera Transitions: 'white', 'black', 'top', 'auto'
+     */
+    setCameraView(viewName) {
+      if (viewName === 'auto') {
+        viewName = this.turn === 'b' ? 'black' : 'white';
+      }
+
+      if (viewName === 'white') {
+        this.targetSpherical.theta = 0.0;
+        this.targetSpherical.phi = Math.PI / 3.4;
+        this.targetSpherical.radius = 11.8;
+        this.isFlipped = false;
+      } else if (viewName === 'black') {
+        this.targetSpherical.theta = Math.PI;
+        this.targetSpherical.phi = Math.PI / 3.4;
+        this.targetSpherical.radius = 11.8;
+        this.isFlipped = true;
+      } else if (viewName === 'top') {
+        this.targetSpherical.phi = 0.08;
+        this.targetSpherical.radius = 11.0;
+      }
+    }
+
+    /**
+     * Flips board camera smoothly between White and Black views
+     */
+    flipBoard() {
+      if (this.isFlipped) {
+        this.setCameraView('white');
+      } else {
+        this.setCameraView('black');
+      }
+    }
+
+    /**
+     * Updates current turn ('w' or 'b') for auto-flip calculations
+     */
+    setTurn(turn) {
+      this.turn = turn === 'b' ? 'b' : 'w';
+    }
+
+    /**
+     * Retrieves piece metadata and mesh at a given algebraic square
+     */
+    getPieceAtSquare(square) {
+      const entry = this.pieceMap.get(square);
+      return entry ? { type: entry.type, color: entry.color, mesh: entry.mesh } : null;
+    }
+
+    /**
+     * Converts spherical angles to 3D Cartesian coordinates and points camera at target
+     */
+    updateCameraPosition(instant = false) {
+      if (instant) {
+        this.cameraSpherical.theta = this.targetSpherical.theta;
+        this.cameraSpherical.phi = this.targetSpherical.phi;
+        this.cameraSpherical.radius = this.targetSpherical.radius;
+      } else {
+        // Smooth spherical interpolation with shortest angle wrapping
+        let dTheta = this.targetSpherical.theta - this.cameraSpherical.theta;
+        while (dTheta > Math.PI) dTheta -= Math.PI * 2;
+        while (dTheta < -Math.PI) dTheta += Math.PI * 2;
+        this.cameraSpherical.theta += dTheta * this.dampingFactor;
+
+        this.cameraSpherical.phi += (this.targetSpherical.phi - this.cameraSpherical.phi) * this.dampingFactor;
+        this.cameraSpherical.radius += (this.targetSpherical.radius - this.cameraSpherical.radius) * this.dampingFactor;
+      }
+
+      const { radius, theta, phi } = this.cameraSpherical;
+      const sinPhi = Math.sin(phi);
+      const cosPhi = Math.cos(phi);
+      const sinTheta = Math.sin(theta);
+      const cosTheta = Math.cos(theta);
+
+      this.camera.position.x = this.cameraTarget.x + radius * sinPhi * sinTheta;
+      this.camera.position.y = this.cameraTarget.y + radius * cosPhi;
+      this.camera.position.z = this.cameraTarget.z + radius * sinPhi * cosTheta;
+      this.camera.lookAt(this.cameraTarget);
+    }
+
+    /**
+     * Initializes pointer, touch, and wheel event handlers
+     */
+    initEvents() {
+      const dom = this.renderer.domElement;
+
+      this.onPointerDown = this.handlePointerDown.bind(this);
+      this.onPointerMove = this.handlePointerMove.bind(this);
+      this.onPointerUp = this.handlePointerUp.bind(this);
+      this.onWheel = this.handleWheel.bind(this);
+      this.onContextMenu = (e) => e.preventDefault();
+      this.onWindowResize = this.onResize.bind(this);
+
+      dom.addEventListener('pointerdown', this.onPointerDown);
+      window.addEventListener('pointermove', this.onPointerMove);
+      window.addEventListener('pointerup', this.onPointerUp);
+      dom.addEventListener('wheel', this.onWheel, { passive: false });
+      dom.addEventListener('contextmenu', this.onContextMenu);
+      window.addEventListener('resize', this.onWindowResize);
+
+      // Support container resize observer
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(() => this.onResize());
+        this.resizeObserver.observe(this.containerEl);
+      }
+    }
+
+    updatePointerCoords(event) {
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    handlePointerDown(event) {
+      this.isPointerDown = true;
+      this.pointerButton = event.button;
+      this.pointerDownPos = { x: event.clientX, y: event.clientY };
+      this.updatePointerCoords(event);
+
+      // If right click or holding shift/ctrl -> orbit / pan mode
+      if (event.button === 2 || event.shiftKey || event.ctrlKey) {
+        return;
+      }
+
+      // Raycast piece meshes first
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const pieceIntersects = this.raycaster.intersectObjects(this.piecesGroup.children, true);
+
+      if (pieceIntersects.length > 0) {
+        // Find top-level piece group
+        let hitMesh = pieceIntersects[0].object;
+        while (hitMesh.parent && hitMesh.parent !== this.piecesGroup) {
+          hitMesh = hitMesh.parent;
+        }
+
+        // Find which square this piece belongs to
+        let hitSquare = null;
+        for (const [sq, entry] of this.pieceMap.entries()) {
+          if (entry.mesh === hitMesh) {
+            hitSquare = sq;
+            break;
+          }
+        }
+
+        if (hitSquare) {
+          this.dragCandidate = {
+            mesh: hitMesh,
+            square: hitSquare,
+            originalPos: hitMesh.position.clone()
+          };
+          return;
+        }
+      }
+
+      // Check board square raycast
+      const boardIntersects = this.raycaster.intersectObjects(this.squareMeshes);
+      if (boardIntersects.length > 0) {
+        const sq = boardIntersects[0].object.userData.square;
+        this.boardClickCandidate = { square: sq };
+      }
+    }
+
+    handlePointerMove(event) {
+      const deltaX = event.clientX - this.pointerDownPos.x;
+      const deltaY = event.clientY - this.pointerDownPos.y;
+      const distance = Math.hypot(deltaX, deltaY);
+
+      this.updatePointerCoords(event);
+
+      // 1. Piece Dragging Mode
+      if (this.dragCandidate && distance > 5 && !this.draggedPiece) {
+        // Activate piece drag
+        this.draggedPiece = this.dragCandidate;
+        this.dragCandidate = null;
+        this.draggedPiece.mesh.position.y = 0.55; // Lift piece
+      }
+
+      if (this.draggedPiece) {
+        // Raycast against horizontal plane at y = 0.55
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+        const intersectPoint = new THREE.Vector3();
+        if (this.raycaster.ray.intersectPlane(this.interactionPlane, intersectPoint)) {
+          this.draggedPiece.mesh.position.x = intersectPoint.x;
+          this.draggedPiece.mesh.position.z = intersectPoint.z;
+
+          // Track hovered square
+          const hovered = worldToSquare(intersectPoint.x, intersectPoint.z);
+          if (hovered !== this.hoveredSquare) {
+            this.hoveredSquare = hovered;
+          }
+        }
+        return;
+      }
+
+      // 2. Camera Controls (Orbit / Pan)
+      if (this.isPointerDown) {
+        const lastX = this.pointerLastX ?? event.clientX;
+        const lastY = this.pointerLastY ?? event.clientY;
+        const moveX = event.clientX - lastX;
+        const moveY = event.clientY - lastY;
+
+        if (this.pointerButton === 2 || event.shiftKey) {
+          // Pan camera target
+          const panSpeed = 0.012 * (this.cameraSpherical.radius / 12.0);
+          const right = new THREE.Vector3();
+          this.camera.getWorldDirection(right);
+          right.cross(this.camera.up).normalize();
+
+          const up = new THREE.Vector3(0, 1, 0);
+
+          this.cameraTarget.addScaledVector(right, -moveX * panSpeed);
+          this.cameraTarget.addScaledVector(up, moveY * panSpeed);
+        } else {
+          // Orbit camera angles
+          const orbitSpeed = 0.007;
+          this.targetSpherical.theta -= moveX * orbitSpeed;
+          this.targetSpherical.phi -= moveY * orbitSpeed;
+
+          // Clamp polar angle
+          this.targetSpherical.phi = Math.max(
+            this.minPhi,
+            Math.min(this.maxPhi, this.targetSpherical.phi)
+          );
+        }
+
+        this.pointerLastX = event.clientX;
+        this.pointerLastY = event.clientY;
+      } else {
+        this.pointerLastX = event.clientX;
+        this.pointerLastY = event.clientY;
+      }
+    }
+
+    handlePointerUp(event) {
+      const deltaX = event.clientX - this.pointerDownPos.x;
+      const deltaY = event.clientY - this.pointerDownPos.y;
+      const distance = Math.hypot(deltaX, deltaY);
+
+      // 1. Finished Piece Drag
+      if (this.draggedPiece) {
+        const fromSquare = this.draggedPiece.square;
+        const targetSquare = worldToSquare(
+          this.draggedPiece.mesh.position.x,
+          this.draggedPiece.mesh.position.z
+        );
+
+        // Reset piece position back to original before triggering callbacks
+        this.draggedPiece.mesh.position.copy(this.draggedPiece.originalPos);
+        this.draggedPiece.mesh.position.y = 0;
+
+        if (targetSquare && targetSquare !== fromSquare) {
+          // Drop triggered
+          this.callbacks.onPieceDrop(fromSquare, targetSquare);
+        } else if (targetSquare === fromSquare) {
+          this.callbacks.onSquareClick(fromSquare);
+        }
+
+        this.draggedPiece = null;
+        this.dragCandidate = null;
+        this.isPointerDown = false;
+        return;
+      }
+
+      // 2. Click on Piece
+      if (this.dragCandidate && distance < 6) {
+        const sq = this.dragCandidate.square;
+        this.callbacks.onSquareClick(sq);
+        this.dragCandidate = null;
+        this.isPointerDown = false;
+        return;
+      }
+
+      // 3. Click on Board Square
+      if (this.boardClickCandidate && distance < 6) {
+        const sq = this.boardClickCandidate.square;
+        this.callbacks.onSquareClick(sq);
+        this.boardClickCandidate = null;
+        this.isPointerDown = false;
+        return;
+      }
+
+      this.dragCandidate = null;
+      this.boardClickCandidate = null;
+      this.isPointerDown = false;
+    }
+
+    handleWheel(event) {
+      event.preventDefault();
+      const zoomSpeed = 0.005;
+      this.targetSpherical.radius += event.deltaY * zoomSpeed;
+      this.targetSpherical.radius = Math.max(
+        this.minRadius,
+        Math.min(this.maxRadius, this.targetSpherical.radius)
+      );
+    }
+
+    /**
+     * Resizes camera aspect ratio and renderer viewport
+     */
+    onResize() {
+      if (!this.containerEl || !this.renderer) return;
+      const width = this.containerEl.clientWidth || 800;
+      const height = this.containerEl.clientHeight || 600;
+
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(width, height);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    }
+
+    /**
+     * Animation render loop
+     */
+    startAnimationLoop() {
+      let isRunning = true;
+      this.stopAnimationLoop = () => { isRunning = false; };
+
+      const animate = (time) => {
+        if (!isRunning) return;
+        requestAnimationFrame(animate);
+
+        // Update active piece animations
+        if (this.activeAnimations.length > 0) {
+          for (let i = this.activeAnimations.length - 1; i >= 0; i--) {
+            const finished = this.activeAnimations[i].update(time);
+            if (finished) {
+              this.activeAnimations.splice(i, 1);
+            }
+          }
+        }
+
+        // Pulsing check ring animation
+        if (this.checkPulseMesh) {
+          const pulse = 0.55 + 0.35 * Math.sin(time * 0.008);
+          this.checkPulseMesh.material.opacity = pulse;
+        }
+
+        // Camera damping
+        this.updateCameraPosition();
+
+        // Render scene
+        this.renderer.render(this.scene, this.camera);
+      };
+
+      requestAnimationFrame(animate);
+    }
+
+    /**
+     * Helper to recursively dispose geometries and materials
+     */
+    disposeObject(obj) {
+      if (!obj) return;
+      obj.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => {
+              if (m.map) m.map.dispose();
+              m.dispose();
+            });
+          } else {
+            if (child.material.map) child.material.map.dispose();
+            child.material.dispose();
+          }
+        }
+      });
+    }
+
+    /**
+     * Destroys the 3D scene, removes event listeners, and disposes GPU resources
+     */
+    destroy() {
+      if (this.stopAnimationLoop) this.stopAnimationLoop();
+
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+      }
+
+      const dom = this.renderer.domElement;
+      dom.removeEventListener('pointerdown', this.onPointerDown);
+      window.removeEventListener('pointermove', this.onPointerMove);
+      window.removeEventListener('pointerup', this.onPointerUp);
+      dom.removeEventListener('wheel', this.onWheel);
+      dom.removeEventListener('contextmenu', this.onContextMenu);
+      window.removeEventListener('resize', this.onWindowResize);
+
+      this.disposeObject(this.scene);
+      this.renderer.dispose();
+      if (dom.parentElement) {
+        dom.parentElement.removeChild(dom);
+      }
+    }
+  }
+
+  return ChessScene3D;
+});
