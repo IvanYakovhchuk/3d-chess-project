@@ -53,8 +53,19 @@
         </div>
       </div>
 
-      <!-- Quick Theme & Audio Controls -->
+      <!-- Quick Theme, Camera & Audio Controls -->
       <div class="top-actions header-right-island glass-card">
+        <!-- Quick Camera View Controls -->
+        <div class="camera-pill-bar">
+          <span class="pill-label">Camera</span>
+          <button id="quick-cam-white" class="pill-btn active" title="White Perspective">White</button>
+          <button id="quick-cam-black" class="pill-btn" title="Black Perspective">Black</button>
+          <button id="quick-cam-top" class="pill-btn" title="Top-Down Tactical View">Top</button>
+          <button id="quick-cam-flip" class="pill-btn" title="Flip View 180°">🔄 Flip</button>
+        </div>
+
+        <div class="header-divider"></div>
+
         <!-- 3D / 2D View Mode Switcher -->
         <div class="mode-toggle-group" role="group" aria-label="Perspective Mode">
           <button id="btn-mode-3d" class="mode-btn active" title="Switch to 3D View [V]">3D</button>
@@ -84,8 +95,8 @@
           </svg>
         </button>
 
-        <!-- Sidebar Toggle (Mobile / Responsive) -->
-        <button id="btn-sidebar-toggle" class="glass-btn icon-btn mobile-only" title="Toggle Move History & Settings" aria-label="Toggle Panel">
+        <!-- Sidebar Toggle (Desktop & Mobile) -->
+        <button id="btn-sidebar-toggle" class="glass-btn icon-btn active" title="Toggle Move History & Settings" aria-label="Toggle Panel">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
           </svg>
@@ -93,72 +104,11 @@
       </div>
     </header>
 
-    <!-- Main Content Area: Player Panels on left/top/bottom, Game Sidebar on right -->
+    <!-- Main Content Area: Game Sidebar on right -->
     <div class="hud-body">
-      
-      <!-- Player Panels Floating Overlay -->
-      <div class="players-column">
-        
-        <!-- Opponent Player Card (Black) -->
-        <div id="player-card-b" class="player-card player-black glass-card">
-          <div class="player-header">
-            <div class="player-avatar black-avatar">
-              <span class="avatar-piece">♚</span>
-              <span class="turn-indicator-dot"></span>
-            </div>
-            <div class="player-info">
-              <div class="player-name-row">
-                <span class="player-name">Black</span>
-                <span class="player-role-badge">Player 2</span>
-              </div>
-              <div class="material-row">
-                <span id="material-b" class="material-advantage hidden">+0</span>
-                <div id="captured-b" class="captured-tray" title="Pieces captured by Black"></div>
-              </div>
-            </div>
-            <div class="player-clock-container">
-              <div id="clock-b" class="player-clock">∞</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Floating Quick Camera Controls (Mobile/Desktop quick pills) -->
-        <div class="camera-pill-bar glass-card">
-          <span class="pill-label">Camera</span>
-          <button id="quick-cam-white" class="pill-btn active" title="White Perspective">White</button>
-          <button id="quick-cam-black" class="pill-btn" title="Black Perspective">Black</button>
-          <button id="quick-cam-top" class="pill-btn" title="Top-Down Tactical View">Top</button>
-          <button id="quick-cam-flip" class="pill-btn" title="Flip View 180°">🔄 Flip</button>
-          <button id="quick-mode-toggle" class="pill-btn mode-pill" title="Toggle 3D / 2D View Mode [V]">2D View</button>
-        </div>
-
-        <!-- User Player Card (White) -->
-        <div id="player-card-w" class="player-card player-white glass-card active-turn">
-          <div class="player-header">
-            <div class="player-avatar white-avatar">
-              <span class="avatar-piece">♔</span>
-              <span class="turn-indicator-dot"></span>
-            </div>
-            <div class="player-info">
-              <div class="player-name-row">
-                <span class="player-name">White</span>
-                <span class="player-role-badge">Player 1</span>
-              </div>
-              <div class="material-row">
-                <span id="material-w" class="material-advantage hidden">+0</span>
-                <div id="captured-w" class="captured-tray" title="Pieces captured by White"></div>
-              </div>
-            </div>
-            <div class="player-clock-container">
-              <div id="clock-w" class="player-clock">∞</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
 
       <!-- Right Glass Sidebar: Game HUD, Moves, Timers, Actions -->
-      <aside id="game-sidebar" class="game-sidebar glass-card">
+      <aside id="game-sidebar" class="game-sidebar glass-card open">
         
         <!-- Sidebar Header with Tabs or Sections -->
         <div class="sidebar-section time-controls-section">
@@ -171,6 +121,55 @@
             <button class="tc-btn" data-time="300">5 min</button>
             <button class="tc-btn" data-time="600">10 min</button>
             <button class="tc-btn" data-time="900">15 min</button>
+          </div>
+
+          <!-- Players & Clocks inside Sidebar -->
+          <div class="sidebar-players-list">
+            <!-- Opponent Player Card (Black) -->
+            <div id="player-card-b" class="player-card player-black glass-card">
+              <div class="player-header">
+                <div class="player-avatar black-avatar">
+                  <span class="avatar-piece">♚</span>
+                  <span class="turn-indicator-dot"></span>
+                </div>
+                <div class="player-info">
+                  <div class="player-name-row">
+                    <span class="player-name">Black</span>
+                    <span class="player-role-badge">Player 2</span>
+                  </div>
+                  <div class="material-row">
+                    <span id="material-b" class="material-advantage hidden">+0</span>
+                    <div id="captured-b" class="captured-tray" title="Pieces captured by Black"></div>
+                  </div>
+                </div>
+                <div class="player-clock-container">
+                  <div id="clock-b" class="player-clock">∞</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- User Player Card (White) -->
+            <div id="player-card-w" class="player-card player-white glass-card active-turn">
+              <div class="player-header">
+                <div class="player-avatar white-avatar">
+                  <span class="avatar-piece">♔</span>
+                  <span class="turn-indicator-dot"></span>
+                </div>
+                <div class="player-info">
+                  <div class="player-name-row">
+                    <span class="player-name">White</span>
+                    <span class="player-role-badge">Player 1</span>
+                  </div>
+                  <div class="material-row">
+                    <span id="material-w" class="material-advantage hidden">+0</span>
+                    <div id="captured-w" class="captured-tray" title="Pieces captured by White"></div>
+                  </div>
+                </div>
+                <div class="player-clock-container">
+                  <div id="clock-w" class="player-clock">∞</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

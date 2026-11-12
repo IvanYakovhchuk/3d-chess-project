@@ -409,6 +409,17 @@ html, body {
   fill: var(--accent-cyan);
 }
 
+.icon-btn.active {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #080b14;
+  box-shadow: 0 0 12px var(--accent-cyan-glow);
+}
+
+.icon-btn.active svg {
+  fill: #080b14;
+}
+
 .mobile-only {
   display: none;
 }
@@ -587,15 +598,17 @@ html, body {
   animation: pulse-rapid 1s infinite;
 }
 
-/* Floating Quick Camera Controls */
+/* Inline Quick Camera Controls inside header-right-island */
 .camera-pill-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--radius-full);
-  margin: 10px 0;
-  align-self: flex-start;
+  gap: 3px;
+  background: rgba(8, 12, 22, 0.65);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+  margin: 0;
   pointer-events: auto;
 }
 
@@ -603,34 +616,32 @@ html, body {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  margin-right: 4px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: 0 4px;
 }
 
 .pill-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--glass-border);
+  background: transparent;
+  border: none;
   color: var(--text-muted);
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-main);
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .pill-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
 .pill-btn.active {
-  background: var(--accent-cyan);
-  border-color: var(--accent-cyan);
-  color: #080b14;
-  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
+  color: #060912;
   box-shadow: 0 0 10px var(--accent-cyan-glow);
 }
 
@@ -643,10 +654,107 @@ html, body {
   flex-direction: column;
   padding: 16px;
   gap: 16px;
-  max-height: 100%;
+  max-height: calc(100vh - var(--header-height) - 36px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  position: fixed;
+  top: calc(var(--header-height) + 14px);
+  right: 14px;
+  bottom: 14px;
+  z-index: 50;
+  transform: translateX(calc(100% + 28px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+.game-sidebar.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Sidebar Players List (embedded in Time Control section) */
+.sidebar-players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sidebar-players-list .player-card {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(10, 14, 24, 0.55);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  border-left: 3px solid transparent;
+  transition: all var(--transition-normal);
+}
+
+.sidebar-players-list .player-card.active-turn {
+  background: rgba(18, 26, 44, 0.85);
+  border-left: 3px solid var(--accent-cyan);
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.25);
+}
+
+.sidebar-players-list #player-card-b.active-turn {
+  border-left: 3px solid var(--accent-purple);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.25);
+}
+
+.sidebar-players-list .player-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.sidebar-players-list .player-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.sidebar-players-list .player-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-players-list .player-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.sidebar-players-list .player-role-badge {
+  font-size: 0.65rem;
+}
+
+.sidebar-players-list .material-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 18px;
+}
+
+.sidebar-players-list .captured-tray {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  font-size: 0.82rem;
+}
+
+.sidebar-players-list .player-clock {
+  font-size: 1rem;
+  padding: 5px 9px;
+  min-width: 60px;
 }
 
 .game-sidebar::-webkit-scrollbar {
@@ -1170,148 +1278,23 @@ input:checked + .slider:before {
 }
 
 /* ==========================================================================
-   Responsive Adaptations (Polished Mobile Chess App Layout)
+   Responsive Adaptations
    ========================================================================== */
 @media (max-width: 900px) {
-  .hud-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    pointer-events: none;
-    min-height: 0;
-  }
-  
-  .players-column {
-    flex: 1;
-    width: 100%;
-    max-width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    pointer-events: none;
-  }
-  
-  /* Top Player Bar (Black) & Bottom Player Bar (White) */
-  .player-card {
-    width: 100%;
-    max-width: 100%;
-    padding: 6px 12px;
-    border-radius: var(--radius-md);
-    pointer-events: auto;
-    box-sizing: border-box;
-  }
-
-  .player-header {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin: 0;
-  }
-
-  .player-avatar {
-    width: 32px;
-    height: 32px;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-  }
-
-  .player-info {
-    display: flex;
-    align-items: center;
-    flex-direction: row;
-    flex: 1;
-    min-width: 0;
-    gap: 8px;
-  }
-
-  .player-name-row {
-    flex-shrink: 0;
-    gap: 4px;
-  }
-
-  .player-name {
-    font-size: 0.85rem;
-  }
-
-  .player-role-badge {
-    display: none;
-  }
-
-  .material-row {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    gap: 4px;
-  }
-
-  .captured-tray {
-    flex: 1;
-    min-height: 22px;
-    padding: 2px 4px;
-    margin: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .player-clock-container {
-    flex-shrink: 0;
-  }
-
-  .player-clock {
-    font-size: 0.95rem;
-    padding: 4px 8px;
-    min-width: 58px;
-  }
-
-  /* Keep camera-pill-bar visible and compact at bottom center */
-  .camera-pill-bar {
-    display: flex !important;
-    align-self: center;
-    margin-top: 6px;
-    padding: 4px 8px;
-    gap: 4px;
-    pointer-events: auto;
-    max-width: 100%;
-    overflow-x: auto;
-  }
-
-  .pill-label {
-    display: none;
-  }
-
-  .pill-btn {
-    padding: 4px 8px;
-    font-size: 0.72rem;
-    white-space: nowrap;
-  }
-  
   .game-sidebar {
     position: fixed;
     top: calc(var(--header-height) + 12px);
     right: 10px;
     bottom: 10px;
-    z-index: 50;
-    transform: translateX(110%);
-    transition: transform var(--transition-normal);
-  }
-
-  .game-sidebar.open {
-    transform: translateX(0);
-  }
-
-  .mobile-only {
-    display: flex;
+    width: min(340px, calc(100vw - 20px));
+    max-height: calc(100vh - var(--header-height) - 24px);
   }
 }
 
 @media (max-width: 768px) {
   .hud-topbar {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
@@ -1332,18 +1315,32 @@ input:checked + .slider:before {
   .header-right-island {
     padding: 5px 8px;
     min-height: 40px;
-    gap: 6px;
-    flex-shrink: 0;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .camera-pill-bar {
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .pill-label {
+    display: none;
+  }
+
+  .pill-btn {
+    padding: 4px 6px;
+    font-size: 0.72rem;
   }
 
   .mode-btn {
-    padding: 4px 8px;
+    padding: 4px 6px;
     font-size: 0.72rem;
   }
 
   #theme-selector {
-    max-width: 92px;
-    padding: 4px 20px 4px 6px;
+    max-width: 86px;
+    padding: 4px 18px 4px 6px;
     font-size: 0.72rem;
   }
 

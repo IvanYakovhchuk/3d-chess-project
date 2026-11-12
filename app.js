@@ -321,7 +321,6 @@
       // 3D / 2D Mode Switcher
       this.dom.btnMode3D = document.getElementById('btn-mode-3d');
       this.dom.btnMode2D = document.getElementById('btn-mode-2d');
-      this.dom.quickModeToggle = document.getElementById('quick-mode-toggle');
       this.dom.activeModeBadge = document.getElementById('active-mode-badge');
 
       this.dom.playerCardW = document.getElementById('player-card-w');
@@ -416,10 +415,14 @@
         this.showToast(isMuted ? 'Sound muted' : 'Sound enabled');
       });
 
-      // Mobile sidebar drawer toggle
-      if (this.dom.btnSidebarToggle) {
+      // Sidebar panel toggle (desktop & mobile)
+      if (this.dom.btnSidebarToggle && this.dom.gameSidebar) {
+        this.dom.btnSidebarToggle.classList.toggle('active', this.dom.gameSidebar.classList.contains('open'));
+
         this.dom.btnSidebarToggle.addEventListener('click', () => {
-          this.dom.gameSidebar.classList.toggle('open');
+          const isOpen = this.dom.gameSidebar.classList.toggle('open');
+          this.dom.btnSidebarToggle.classList.toggle('active', isOpen);
+          this.showToast(isOpen ? 'Panel opened' : 'Panel closed', 1500);
         });
       }
 
@@ -429,9 +432,6 @@
       }
       if (this.dom.btnMode2D) {
         this.dom.btnMode2D.addEventListener('click', () => this.setViewMode('2d'));
-      }
-      if (this.dom.quickModeToggle) {
-        this.dom.quickModeToggle.addEventListener('click', () => this.toggleViewMode());
       }
 
       // Theme selector
@@ -971,9 +971,6 @@
       }
       if (this.dom.btnMode2D) {
         this.dom.btnMode2D.classList.toggle('active', mode === '2d');
-      }
-      if (this.dom.quickModeToggle) {
-        this.dom.quickModeToggle.textContent = mode === '3d' ? '2D View' : '3D View';
       }
       if (this.dom.activeModeBadge) {
         this.dom.activeModeBadge.textContent = mode === '3d' ? '3D Mode' : '2D Mode';
