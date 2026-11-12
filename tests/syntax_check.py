@@ -2,9 +2,14 @@
 syntax_check.py - Robust tokenizer and bracket balance checker for JS files
 """
 
+import os
 import sys
 
 def check_js_syntax(filename):
+    if not os.path.exists(filename):
+        parent_candidate = os.path.join(os.path.dirname(__file__), '..', filename)
+        if os.path.exists(parent_candidate):
+            filename = parent_candidate
     print(f"Checking syntax and structural validity for: {filename}")
     with open(filename, 'r', encoding='utf-8') as f:
         code = f.read()

@@ -3,7 +3,7 @@
  * Comprehensive edge-case verification for ChessEngine
  */
 
-const ChessEngine = require('./engine.js');
+const ChessEngine = require('../engine.js');
 
 let totalTests = 0;
 let passedTests = 0;
