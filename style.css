@@ -598,49 +598,50 @@ html, body {
   animation: pulse-rapid 1s infinite;
 }
 
-/* Inline Quick Camera Controls inside header-right-island */
+/* Camera Angle Selector Grid inside camera-section in #game-sidebar */
 .camera-pill-bar {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  background: rgba(8, 12, 22, 0.65);
-  padding: 3px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: 100%;
+  padding: 4px;
+  background: rgba(8, 12, 22, 0.55);
   border-radius: var(--radius-md);
   border: 1px solid var(--glass-border);
   box-shadow: none;
   margin: 0;
-  pointer-events: auto;
+  box-sizing: border-box;
 }
 
 .pill-label {
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  padding: 0 4px;
+  display: none;
 }
 
 .pill-btn {
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
   color: var(--text-muted);
-  padding: 5px 9px;
+  padding: 6px 4px;
   border-radius: var(--radius-sm);
   font-family: var(--font-main);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .pill-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
 
 .pill-btn.active {
   background: linear-gradient(135deg, var(--accent-cyan), #0284c7);
+  border-color: var(--accent-cyan);
   color: #060912;
   box-shadow: 0 0 10px var(--accent-cyan-glow);
 }
@@ -1320,16 +1321,12 @@ input:checked + .slider:before {
   }
 
   .camera-pill-bar {
-    gap: 2px;
-    padding: 2px;
-  }
-
-  .pill-label {
-    display: none;
+    gap: 4px;
+    padding: 3px;
   }
 
   .pill-btn {
-    padding: 4px 6px;
+    padding: 5px 3px;
     font-size: 0.72rem;
   }
 

@@ -142,22 +142,31 @@ assert(
 );
 
 console.log(`\n======================================================================`);
-console.log(`  SUITE: 3. Camera View Switcher in .header-right-island & Mode Toggle Deduplication`);
+console.log(`  SUITE: 3. Camera View Switcher in #game-sidebar .camera-section (Compact Header)`);
 console.log(`======================================================================`);
 
-// 3.1 .camera-pill-bar is inside .header-right-island
+// 3.1 .camera-pill-bar is removed from .header-right-island (preventing overhanging over board)
 assert(
-  headerRightHtml.includes('class="camera-pill-bar"'),
-  '.camera-pill-bar is located inside .header-right-island'
+  !headerRightHtml.includes('class="camera-pill-bar"'),
+  '.camera-pill-bar removed from .header-right-island (compact header, no overhang)'
 );
 
-// 3.2 Contains camera angle buttons
-assert(headerRightHtml.includes('id="quick-cam-white"'), 'Contains #quick-cam-white');
-assert(headerRightHtml.includes('id="quick-cam-black"'), 'Contains #quick-cam-black');
-assert(headerRightHtml.includes('id="quick-cam-top"'), 'Contains #quick-cam-top');
-assert(headerRightHtml.includes('id="quick-cam-flip"'), 'Contains #quick-cam-flip');
+// 3.2 .camera-pill-bar is placed inside .camera-section in #game-sidebar
+const cameraSectionStart = sidebarHtml.indexOf('class="sidebar-section camera-section"');
+const cameraSectionHtml = cameraSectionStart !== -1 ? sidebarHtml.slice(cameraSectionStart) : '';
 
-// 3.3 #quick-mode-toggle is removed (deduplicated)
+assert(
+  sidebarHtml.includes('camera-section') && sidebarHtml.includes('camera-pill-bar'),
+  '.camera-pill-bar is located inside .camera-section in #game-sidebar'
+);
+
+// 3.3 Contains camera angle buttons
+assert(sidebarHtml.includes('id="quick-cam-white"'), 'Contains #quick-cam-white');
+assert(sidebarHtml.includes('id="quick-cam-black"'), 'Contains #quick-cam-black');
+assert(sidebarHtml.includes('id="quick-cam-top"'), 'Contains #quick-cam-top');
+assert(sidebarHtml.includes('id="quick-cam-flip"'), 'Contains #quick-cam-flip');
+
+// 3.4 #quick-mode-toggle is removed (deduplicated)
 assert(
   !htmlSrc.includes('id="quick-mode-toggle"'),
   '#quick-mode-toggle removed from index.html (deduplicated with #btn-mode-3d / #btn-mode-2d)'

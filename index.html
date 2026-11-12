@@ -53,19 +53,8 @@
         </div>
       </div>
 
-      <!-- Quick Theme, Camera & Audio Controls -->
+      <!-- Quick Theme & Audio Controls -->
       <div class="top-actions header-right-island glass-card">
-        <!-- Quick Camera View Controls -->
-        <div class="camera-pill-bar">
-          <span class="pill-label">Camera</span>
-          <button id="quick-cam-white" class="pill-btn active" title="White Perspective">White</button>
-          <button id="quick-cam-black" class="pill-btn" title="Black Perspective">Black</button>
-          <button id="quick-cam-top" class="pill-btn" title="Top-Down Tactical View">Top</button>
-          <button id="quick-cam-flip" class="pill-btn" title="Flip View 180°">🔄 Flip</button>
-        </div>
-
-        <div class="header-divider"></div>
-
         <!-- 3D / 2D View Mode Switcher -->
         <div class="mode-toggle-group" role="group" aria-label="Perspective Mode">
           <button id="btn-mode-3d" class="mode-btn active" title="Switch to 3D View [V]">3D</button>
@@ -203,6 +192,15 @@
             <span class="section-title">🎥 View & Mode</span>
             <span id="active-mode-badge" class="clock-badge">3D Mode</span>
           </div>
+
+          <!-- Camera Angle Selector -->
+          <div class="camera-pill-bar">
+            <button id="quick-cam-white" class="pill-btn active" title="White Perspective">White</button>
+            <button id="quick-cam-black" class="pill-btn" title="Black Perspective">Black</button>
+            <button id="quick-cam-top" class="pill-btn" title="Top-Down Tactical View">Top</button>
+            <button id="quick-cam-flip" class="pill-btn" title="Flip View 180°">🔄 Flip</button>
+          </div>
+
           <div class="toggle-row">
             <label class="switch-container" for="toggle-autoflip">
               <span class="toggle-label">Auto-flip view on turn</span>
