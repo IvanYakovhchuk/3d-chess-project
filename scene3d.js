@@ -741,6 +741,7 @@
       this.pointerDownPos = { x: 0, y: 0 };
       this.pointerButton = 0;
       this.draggedPiece = null; // { mesh, fromSquare, originalPos, planeIntersectOffset }
+      this.justDropped = null; // { from, to, dropPos }
       this.interactionPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.55); // y = 0.55
       this.hoveredSquare = null;
 
@@ -1344,11 +1345,13 @@
         else if (fromSquare === 'e8' && toSquare === 'c8') castleRookMove = { from: 'a8', to: 'd8' };
       }
 
-      // Detect captured piece
-      let capturedMesh = null;
-      if (toSquare && this.pieceMap.has(toSquare) && this.pieceMap.get(toSquare).mesh !== this.draggedPiece?.mesh) {
-        capturedMesh = this.pieceMap.get(toSquare).mesh;
-      }
+      // Check if this move was just executed via user drag-and-drop
+      const wasDraggedHere = Boolean(
+        this.justDropped &&
+        this.justDropped.from === fromSquare &&
+        this.justDropped.to === toSquare
+      );
+      this.justDropped = null;
 
       // Handle animated move
       const animatedSquares = new Set();
@@ -1360,21 +1363,48 @@
         const toPos = squareToWorld(toSquare);
         const isKnight = pieceEntry.type === 'n' || movingPieceType === 'n';
 
-        // Animate main piece
-        this.animatePieceMove({
-          mesh: mesh,
-          fromPos: fromPos,
-          toPos: toPos,
-          isKnight: isKnight,
-          duration: isKnight ? 380 : 280,
-          onComplete: () => {
-            mesh.position.copy(toPos);
-            // Handle promotion visual update
-            if (lastMove && lastMove.promotion) {
-              this.replaceWithPromotedPiece(toSquare, lastMove.promotion, pieceEntry.color);
-            }
+        // Detect captured piece (including en-passant)
+        let capturedMesh = null;
+        if (this.pieceMap.has(toSquare)) {
+          capturedMesh = this.pieceMap.get(toSquare).mesh;
+        } else if (pieceEntry.type === 'p' && fromSquare[0] !== toSquare[0]) {
+          const epSquare = toSquare[0] + fromSquare[1];
+          if (this.pieceMap.has(epSquare)) {
+            capturedMesh = this.pieceMap.get(epSquare).mesh;
+            this.pieceMap.delete(epSquare);
+            animatedSquares.add(epSquare);
           }
-        });
+        }
+
+        if (wasDraggedHere) {
+          // Piece was already placed at toSquare by drag-and-drop: do NOT animate from fromSquare
+          const yPos = this.viewMode === '2d' ? 0.02 : 0;
+          mesh.position.set(toPos.x, yPos, toPos.z);
+          if (this.viewMode === '2d') {
+            mesh.rotation.y = this.isFlipped ? Math.PI : 0;
+          }
+
+          // Handle promotion visual update immediately if needed
+          if (lastMove && lastMove.promotion) {
+            this.replaceWithPromotedPiece(toSquare, lastMove.promotion, pieceEntry.color);
+          }
+        } else {
+          // Animate main piece (for Click-to-Move, AI moves, etc.)
+          this.animatePieceMove({
+            mesh: mesh,
+            fromPos: fromPos,
+            toPos: toPos,
+            isKnight: isKnight,
+            duration: isKnight ? 380 : 280,
+            onComplete: () => {
+              mesh.position.copy(toPos);
+              // Handle promotion visual update
+              if (lastMove && lastMove.promotion) {
+                this.replaceWithPromotedPiece(toSquare, lastMove.promotion, pieceEntry.color);
+              }
+            }
+          });
+        }
 
         // Update pieceMap registration
         this.pieceMap.delete(fromSquare);
@@ -1409,6 +1439,8 @@
         if (capturedMesh) {
           this.animateCaptureDissolve(capturedMesh);
         }
+      } else {
+        this.justDropped = null;
       }
 
       // Synchronize the full board state
@@ -2041,16 +2073,39 @@
           this.draggedPiece.mesh.position.x,
           this.draggedPiece.mesh.position.z
         );
-
-        // Reset piece position back to original before triggering callbacks
-        this.draggedPiece.mesh.position.copy(this.draggedPiece.originalPos);
-        this.draggedPiece.mesh.position.y = this.viewMode === '2d' ? 0.02 : 0;
-        this.requestRender(true);
+        const draggedPieceMesh = this.draggedPiece.mesh;
+        const originalPos = this.draggedPiece.originalPos;
 
         if (targetSquare && targetSquare !== fromSquare) {
-          // Drop triggered
+          // Snap piece cleanly to target square world coordinates
+          const toPos = squareToWorld(targetSquare);
+          const yPos = this.viewMode === '2d' ? 0.02 : 0;
+          draggedPieceMesh.position.set(toPos.x, yPos, toPos.z);
+
+          // Record drop info so syncBoard knows this piece was already placed by drag-and-drop
+          this.justDropped = {
+            from: fromSquare,
+            to: targetSquare,
+            dropPos: toPos.clone()
+          };
+
+          this.draggedPiece = null;
+          this.dragCandidate = null;
+          this.needsRaycast = false;
+          this.isPointerDown = false;
+          this.requestRender(true);
+
+          // Trigger drop callback
           this.callbacks.onPieceDrop(fromSquare, targetSquare);
-        } else if (targetSquare === fromSquare) {
+          return;
+        }
+
+        // Canceled drag or dropped back on same square: restore original position
+        draggedPieceMesh.position.copy(originalPos);
+        draggedPieceMesh.position.y = this.viewMode === '2d' ? 0.02 : 0;
+        this.justDropped = null;
+
+        if (targetSquare === fromSquare) {
           this.callbacks.onSquareClick(fromSquare);
         }
 
@@ -2058,6 +2113,7 @@
         this.dragCandidate = null;
         this.needsRaycast = false;
         this.isPointerDown = false;
+        this.requestRender(true);
         return;
       }
 
