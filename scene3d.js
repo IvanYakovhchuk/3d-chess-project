@@ -79,17 +79,11 @@
     return 1 - (1 - t) * (1 - t);
   }
 
-  // Procedural Canvas Texture Generator for Board Themes
+  // Procedural Canvas Texture Generator for Board Themes & 3D Room Environment
   const TextureCache = {};
 
   function generateThemeTextures(theme) {
     if (TextureCache[theme]) return TextureCache[theme];
-
-    const size = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
 
     let lightColor, darkColor, frameColor, tableColor;
 
@@ -97,23 +91,23 @@
       lightColor = '#e2c59b';
       darkColor = '#703d1e';
       frameColor = '#3c1d0e';
-      tableColor = '#18120e';
+      tableColor = '#4c2816';
     } else if (theme === 'marble') {
       lightColor = '#f5f6f8';
       darkColor = '#1e2126';
       frameColor = '#111317';
-      tableColor = '#0b0d10';
+      tableColor = '#161920';
     } else if (theme === 'neon') {
       lightColor = '#0d1829';
       darkColor = '#1b0d2a';
       frameColor = '#07090e';
-      tableColor = '#020306';
+      tableColor = '#090b12';
     } else {
       // Classic: Clean, high-contrast Matte Black & White
       lightColor = '#f2f4f7'; // clean soft pure white
       darkColor = '#262a32';  // deep charcoal/slate black
       frameColor = '#181a20'; // sleek dark anthracite
-      tableColor = '#0f1115';
+      tableColor = '#22150f'; // deep rich mahogany
     }
 
     function createSquareTexture(baseColor, isLight, type) {
@@ -172,6 +166,7 @@
       const tex = new THREE.CanvasTexture(c);
       tex.wrapS = THREE.ClampToEdgeWrapping;
       tex.wrapT = THREE.ClampToEdgeWrapping;
+      tex.userData = { isSharedTexture: true };
       return tex;
     }
 
@@ -212,6 +207,530 @@
       fctx.fillRect(0, 0, 512, 512);
     }
     const frameTex = new THREE.CanvasTexture(frameCanvas);
+    frameTex.userData = { isSharedTexture: true };
+
+    // Procedural Floor Texture (Repeating Parquet / Walnut Planks / Checkered Marble / Cyber Grid)
+    function createFloorTexture(thm) {
+      const fc = document.createElement('canvas');
+      fc.width = 512;
+      fc.height = 512;
+      const g = fc.getContext('2d');
+
+      if (thm === 'wood') {
+        // Rustic wide-plank walnut timber floor
+        g.fillStyle = '#3a2012';
+        g.fillRect(0, 0, 512, 512);
+        const plankHeight = 64;
+        const plankTones = ['#452615', '#3d2213', '#4e2c19', '#341c0f', '#422414', '#532e1a', '#3c2112', '#492917'];
+        for (let r = 0; r < 8; r++) {
+          const y = r * plankHeight;
+          g.fillStyle = plankTones[r % plankTones.length];
+          g.fillRect(0, y, 512, plankHeight - 2);
+          g.fillStyle = 'rgba(20, 10, 5, 0.18)';
+          for (let s = 0; s < 6; s++) {
+            g.fillRect(0, y + 8 + s * 9, 512, 2);
+          }
+          const shift = (r % 2) * 256;
+          g.fillStyle = '#1c0d06';
+          g.fillRect(shift, y, 3, plankHeight);
+          g.fillRect((shift + 256) % 512, y, 3, plankHeight);
+        }
+      } else if (thm === 'marble') {
+        // Grand palace checkered white & dark-slate marble floor tiles
+        g.fillStyle = '#16191f';
+        g.fillRect(0, 0, 512, 512);
+        const tileSize = 128;
+        for (let r = 0; r < 4; r++) {
+          for (let col = 0; col < 4; col++) {
+            const isWhiteTile = (r + col) % 2 === 0;
+            const x = col * tileSize;
+            const y = r * tileSize;
+            g.fillStyle = isWhiteTile ? '#e8ebf0' : '#222730';
+            g.fillRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
+            g.strokeStyle = isWhiteTile ? 'rgba(140, 155, 175, 0.22)' : 'rgba(255, 255, 255, 0.12)';
+            g.lineWidth = 1.2;
+            g.beginPath();
+            g.moveTo(x + 10, y + 20);
+            g.lineTo(x + tileSize - 20, y + tileSize - 15);
+            g.stroke();
+          }
+        }
+      } else if (thm === 'neon') {
+        // Cyberpunk dark carbon floor with glowing cyan & magenta laser grid
+        g.fillStyle = '#060810';
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = '#0e1424';
+        g.lineWidth = 1;
+        for (let i = 0; i < 512; i += 32) {
+          g.beginPath();
+          g.moveTo(i, 0); g.lineTo(i, 512);
+          g.moveTo(0, i); g.lineTo(512, i);
+          g.stroke();
+        }
+        g.strokeStyle = 'rgba(0, 240, 255, 0.45)';
+        g.lineWidth = 2;
+        for (let i = 0; i <= 512; i += 128) {
+          g.beginPath();
+          g.moveTo(i, 0); g.lineTo(i, 512);
+          g.moveTo(0, i); g.lineTo(512, i);
+          g.stroke();
+        }
+        g.fillStyle = '#00f0ff';
+        for (let r = 0; r <= 512; r += 128) {
+          for (let c = 0; c <= 512; c += 128) {
+            g.fillRect(c - 3, r - 3, 6, 6);
+          }
+        }
+      } else {
+        // Classic: Warm rich herringbone oak parquet floor
+        g.fillStyle = '#53341c';
+        g.fillRect(0, 0, 512, 512);
+        const blockTones = ['#6e4627', '#623d21', '#754c2b', '#5a371e', '#694224'];
+        const bW = 64;
+        const bH = 32;
+        for (let r = 0; r < 16; r++) {
+          for (let c = 0; c < 8; c++) {
+            const x = c * bW;
+            const y = r * bH;
+            g.fillStyle = blockTones[(r * 3 + c * 2) % blockTones.length];
+            g.fillRect(x + 1, y + 1, bW - 2, bH - 2);
+            g.fillStyle = 'rgba(30, 15, 5, 0.12)';
+            g.fillRect(x + 1, y + 10, bW - 2, 2);
+            g.fillRect(x + 1, y + 20, bW - 2, 2);
+          }
+        }
+      }
+
+      const fTex = new THREE.CanvasTexture(fc);
+      fTex.wrapS = THREE.RepeatWrapping;
+      fTex.wrapT = THREE.RepeatWrapping;
+      fTex.repeat.set(8, 8);
+      fTex.userData = { isSharedTexture: true };
+      return fTex;
+    }
+
+    // Procedural Under-Table Woven Rug / Carpet Texture
+    function createCarpetTexture(thm) {
+      const cc = document.createElement('canvas');
+      cc.width = 512;
+      cc.height = 512;
+      const g = cc.getContext('2d');
+
+      if (thm === 'wood') {
+        // Woven rustic kilim rug with geometric diamond patterns
+        g.fillStyle = '#6b2f1e'; // terracotta
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = '#c48733'; // ochre gold
+        g.lineWidth = 12;
+        g.strokeRect(16, 16, 480, 480);
+        g.strokeStyle = '#2b170e';
+        g.lineWidth = 4;
+        g.strokeRect(26, 26, 460, 460);
+        g.fillStyle = '#8f4228';
+        g.fillRect(40, 40, 432, 432);
+        for (let dx = 128; dx <= 384; dx += 128) {
+          for (let dy = 128; dy <= 384; dy += 128) {
+            g.fillStyle = '#c48733';
+            g.beginPath();
+            g.moveTo(dx, dy - 40);
+            g.lineTo(dx + 40, dy);
+            g.lineTo(dx, dy + 40);
+            g.lineTo(dx - 40, dy);
+            g.closePath();
+            g.fill();
+            g.fillStyle = '#2b170e';
+            g.beginPath();
+            g.arc(dx, dy, 14, 0, Math.PI * 2);
+            g.fill();
+          }
+        }
+      } else if (thm === 'marble') {
+        // Royal Neoclassical tapestry carpet (midnight blue, silver grey, gold acanthus border)
+        g.fillStyle = '#1a2233'; // midnight navy
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = '#c5a059'; // platinum gold
+        g.lineWidth = 14;
+        g.strokeRect(18, 18, 476, 476);
+        g.strokeStyle = '#8fa3bf'; // soft silver
+        g.lineWidth = 4;
+        g.strokeRect(30, 30, 452, 452);
+        g.fillStyle = '#242f44';
+        g.fillRect(45, 45, 422, 422);
+        g.strokeStyle = '#c5a059';
+        g.lineWidth = 5;
+        g.beginPath();
+        g.arc(256, 256, 100, 0, Math.PI * 2);
+        g.stroke();
+        g.beginPath();
+        g.arc(256, 256, 60, 0, Math.PI * 2);
+        g.stroke();
+        for (let a = 0; a < 8; a++) {
+          const angle = (a * Math.PI) / 4;
+          g.beginPath();
+          g.moveTo(256, 256);
+          g.lineTo(256 + Math.cos(angle) * 55, 256 + Math.sin(angle) * 55);
+          g.stroke();
+        }
+      } else if (thm === 'neon') {
+        // Cyberpunk holo-arena battle pad (carbon fiber, hexagonal grid, glowing cyan/magenta border)
+        g.fillStyle = '#090d16';
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = '#00f0ff';
+        g.lineWidth = 8;
+        g.strokeRect(12, 12, 488, 488);
+        g.strokeStyle = '#ff007f';
+        g.lineWidth = 3;
+        g.strokeRect(24, 24, 464, 464);
+        g.strokeStyle = 'rgba(0, 240, 255, 0.6)';
+        g.lineWidth = 4;
+        g.beginPath();
+        for (let h = 0; h < 6; h++) {
+          const ang = (h * Math.PI) / 3;
+          const x = 256 + Math.cos(ang) * 120;
+          const y = 256 + Math.sin(ang) * 120;
+          if (h === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        }
+        g.closePath();
+        g.stroke();
+        g.strokeStyle = '#ff007f';
+        g.lineWidth = 4;
+        [[40, 40], [472, 40], [472, 472], [40, 472]].forEach(([cx, cy]) => {
+          g.beginPath();
+          g.arc(cx, cy, 18, 0, Math.PI * 2);
+          g.stroke();
+        });
+      } else {
+        // Classic: Regal Persian/Oriental carpet (deep burgundy/crimson, ornate gold/navy border)
+        g.fillStyle = '#541219'; // deep crimson
+        g.fillRect(0, 0, 512, 512);
+        g.fillStyle = '#162032'; // dark navy frame
+        g.fillRect(16, 16, 480, 480);
+        g.fillStyle = '#64161f'; // inner field
+        g.fillRect(48, 48, 416, 416);
+        g.strokeStyle = '#d4af37';
+        g.lineWidth = 5;
+        g.strokeRect(20, 20, 472, 472);
+        g.strokeRect(44, 44, 424, 424);
+        g.fillStyle = '#162032';
+        g.beginPath();
+        g.arc(256, 256, 85, 0, Math.PI * 2);
+        g.fill();
+        g.strokeStyle = '#d4af37';
+        g.lineWidth = 4;
+        g.stroke();
+        g.fillStyle = '#d4af37';
+        g.beginPath();
+        g.arc(256, 256, 32, 0, Math.PI * 2);
+        g.fill();
+        const spandrelOffset = 48;
+        const spandrelSize = 70;
+        g.fillStyle = '#162032';
+        [
+          [spandrelOffset, spandrelOffset],
+          [512 - spandrelOffset - spandrelSize, spandrelOffset],
+          [spandrelOffset, 512 - spandrelOffset - spandrelSize],
+          [512 - spandrelOffset - spandrelSize, 512 - spandrelOffset - spandrelSize]
+        ].forEach(([sx, sy]) => {
+          g.fillRect(sx, sy, spandrelSize, spandrelSize);
+          g.strokeStyle = '#d4af37';
+          g.lineWidth = 2;
+          g.strokeRect(sx, sy, spandrelSize, spandrelSize);
+        });
+      }
+
+      const cTex = new THREE.CanvasTexture(cc);
+      cTex.wrapS = THREE.ClampToEdgeWrapping;
+      cTex.wrapT = THREE.ClampToEdgeWrapping;
+      cTex.userData = { isSharedTexture: true };
+      return cTex;
+    }
+
+    // Procedural Room Wall Texture (Wainscoting Panels & Wallpaper / Masonry)
+    function createWallTexture(thm) {
+      const wc = document.createElement('canvas');
+      wc.width = 512;
+      wc.height = 512;
+      const g = wc.getContext('2d');
+
+      if (thm === 'wood') {
+        // Warm cedar horizontal tongue-and-groove wood planks
+        g.fillStyle = '#482a1a';
+        g.fillRect(0, 0, 512, 512);
+        const numPlanks = 16;
+        const pH = 512 / numPlanks;
+        const woodColors = ['#52301e', '#4a2b1b', '#5c3622', '#442718'];
+        for (let i = 0; i < numPlanks; i++) {
+          g.fillStyle = woodColors[i % woodColors.length];
+          g.fillRect(0, i * pH, 512, pH - 2);
+          g.fillStyle = 'rgba(20, 10, 5, 0.15)';
+          g.fillRect(0, i * pH + 8, 512, 1.5);
+        }
+      } else if (thm === 'marble') {
+        // Classical ashlar limestone blocks with soft stone texture
+        g.fillStyle = '#d8dce2';
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = 'rgba(90, 105, 125, 0.35)';
+        g.lineWidth = 2;
+        const bH = 64;
+        for (let r = 0; r < 8; r++) {
+          const y = r * bH;
+          g.beginPath();
+          g.moveTo(0, y); g.lineTo(512, y);
+          g.stroke();
+          const shift = (r % 2) * 128;
+          for (let x = shift; x <= 512; x += 256) {
+            g.beginPath();
+            g.moveTo(x, y); g.lineTo(x, y + bH);
+            g.stroke();
+          }
+        }
+        g.fillStyle = '#b8c0cc';
+        g.fillRect(0, 384, 512, 128);
+        g.strokeStyle = '#8a96a6';
+        g.lineWidth = 4;
+        g.strokeRect(10, 394, 492, 108);
+      } else if (thm === 'neon') {
+        // Cyberpunk dark composite metal wall panels with subtle conduits
+        g.fillStyle = '#080a12';
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = '#141c2e';
+        g.lineWidth = 3;
+        g.strokeRect(8, 8, 496, 496);
+        g.strokeRect(8, 256, 496, 248);
+        g.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(24, 60); g.lineTo(180, 60); g.lineTo(220, 100); g.lineTo(488, 100);
+        g.moveTo(24, 340); g.lineTo(260, 340); g.lineTo(300, 380); g.lineTo(488, 380);
+        g.stroke();
+        g.strokeStyle = 'rgba(255, 0, 127, 0.3)';
+        g.beginPath();
+        g.moveTo(24, 200); g.lineTo(320, 200); g.lineTo(360, 240); g.lineTo(488, 240);
+        g.stroke();
+      } else {
+        // Classic: Rich library study wall (dark walnut boiserie wainscot below, elegant burgundy/taupe damask above)
+        g.fillStyle = '#2f2723';
+        g.fillRect(0, 0, 512, 300);
+        g.fillStyle = 'rgba(0, 0, 0, 0.12)';
+        for (let s = 0; s < 512; s += 32) {
+          g.fillRect(s, 0, 16, 300);
+        }
+        g.fillStyle = '#1c1410';
+        g.fillRect(0, 296, 512, 12);
+        g.fillStyle = '#543621';
+        g.fillRect(0, 300, 512, 6);
+        g.fillStyle = '#261b14';
+        g.fillRect(0, 308, 512, 204);
+        for (let p = 0; p < 2; p++) {
+          const px = 20 + p * 246;
+          g.fillStyle = '#1e140d';
+          g.fillRect(px, 324, 226, 172);
+          g.strokeStyle = '#472b19';
+          g.lineWidth = 3;
+          g.strokeRect(px + 4, 328, 218, 164);
+        }
+      }
+
+      const wTex = new THREE.CanvasTexture(wc);
+      wTex.wrapS = THREE.RepeatWrapping;
+      wTex.wrapT = THREE.RepeatWrapping;
+      wTex.repeat.set(4, 1);
+      wTex.userData = { isSharedTexture: true };
+      return wTex;
+    }
+
+    // Procedural Realistic Tabletop Texture
+    function createTableTexture(thm) {
+      const tc = document.createElement('canvas');
+      tc.width = 512;
+      tc.height = 512;
+      const g = tc.getContext('2d');
+
+      if (thm === 'wood') {
+        g.fillStyle = '#4c2816';
+        g.fillRect(0, 0, 512, 512);
+        g.fillStyle = 'rgba(20, 10, 5, 0.18)';
+        for (let i = 0; i < 40; i++) {
+          g.fillRect(0, i * 13, 512, 4);
+        }
+        g.strokeStyle = 'rgba(255, 200, 150, 0.08)';
+        g.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          g.beginPath();
+          g.arc(256, -100 + i * 80, 200 + i * 40, 0, Math.PI * 2);
+          g.stroke();
+        }
+      } else if (thm === 'marble') {
+        g.fillStyle = '#14171d';
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = 'rgba(220, 230, 245, 0.22)';
+        g.lineWidth = 1.5;
+        for (let v = 0; v < 5; v++) {
+          g.beginPath();
+          let x = (v * 100) % 512;
+          let y = 0;
+          g.moveTo(x, y);
+          while (y < 512) {
+            x += (Math.random() - 0.48) * 20;
+            y += 12 + Math.random() * 14;
+            g.lineTo(x, y);
+          }
+          g.stroke();
+        }
+      } else if (thm === 'neon') {
+        g.fillStyle = '#090b12';
+        g.fillRect(0, 0, 512, 512);
+        g.strokeStyle = '#00f0ff';
+        g.lineWidth = 4;
+        g.strokeRect(6, 6, 500, 500);
+        g.strokeStyle = 'rgba(255, 0, 127, 0.4)';
+        g.lineWidth = 2;
+        g.strokeRect(18, 18, 476, 476);
+      } else {
+        g.fillStyle = '#22150f';
+        g.fillRect(0, 0, 512, 512);
+        g.fillStyle = 'rgba(0, 0, 0, 0.22)';
+        for (let i = 0; i < 512; i += 8) {
+          g.fillRect(0, i, 512, 3);
+        }
+        g.strokeStyle = 'rgba(80, 45, 25, 0.15)';
+        g.lineWidth = 2;
+        g.strokeRect(8, 8, 496, 496);
+      }
+
+      const tTex = new THREE.CanvasTexture(tc);
+      tTex.userData = { isSharedTexture: true };
+      return tTex;
+    }
+
+    // Procedural 3D Chess Clock Dial Texture
+    function createClockDialTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 256;
+      const g = c.getContext('2d');
+
+      g.fillStyle = '#f8f6f0';
+      g.beginPath();
+      g.arc(128, 128, 120, 0, Math.PI * 2);
+      g.fill();
+
+      g.strokeStyle = '#c5a059';
+      g.lineWidth = 8;
+      g.stroke();
+
+      g.strokeStyle = '#222222';
+      for (let i = 0; i < 12; i++) {
+        const angle = (i * Math.PI) / 6;
+        const r1 = 104;
+        const r2 = i % 3 === 0 ? 84 : 94;
+        g.lineWidth = i % 3 === 0 ? 4 : 2;
+        g.beginPath();
+        g.moveTo(128 + Math.cos(angle) * r1, 128 + Math.sin(angle) * r1);
+        g.lineTo(128 + Math.cos(angle) * r2, 128 + Math.sin(angle) * r2);
+        g.stroke();
+      }
+
+      // Red time trouble flag
+      g.fillStyle = '#dc2626';
+      g.beginPath();
+      g.moveTo(128, 128);
+      g.lineTo(95, 45);
+      g.lineTo(110, 40);
+      g.closePath();
+      g.fill();
+
+      // Hour hand
+      g.strokeStyle = '#18181b';
+      g.lineWidth = 5;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(128, 128);
+      g.lineTo(128 + Math.cos(-Math.PI / 4) * 55, 128 + Math.sin(-Math.PI / 4) * 55);
+      g.stroke();
+
+      // Minute hand
+      g.lineWidth = 3.5;
+      g.beginPath();
+      g.moveTo(128, 128);
+      g.lineTo(128 + Math.cos(-Math.PI / 1.8) * 82, 128 + Math.sin(-Math.PI / 1.8) * 82);
+      g.stroke();
+
+      // Center cap
+      g.fillStyle = '#c5a059';
+      g.beginPath();
+      g.arc(128, 128, 7, 0, Math.PI * 2);
+      g.fill();
+
+      const cdTex = new THREE.CanvasTexture(c);
+      cdTex.userData = { isSharedTexture: true };
+      return cdTex;
+    }
+
+    // Procedural Classical Painting Texture for Study Wall Decor
+    function createPaintingTexture(idx) {
+      const pc = document.createElement('canvas');
+      pc.width = 512;
+      pc.height = 340;
+      const g = pc.getContext('2d');
+
+      if (idx === 0) {
+        const grad = g.createLinearGradient(0, 0, 0, 340);
+        grad.addColorStop(0, '#f97316');
+        grad.addColorStop(0.35, '#fbbf24');
+        grad.addColorStop(0.6, '#3b82f6');
+        grad.addColorStop(1, '#1e293b');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 512, 340);
+        g.fillStyle = '#334155';
+        g.beginPath();
+        g.moveTo(0, 220);
+        g.lineTo(120, 110);
+        g.lineTo(240, 220);
+        g.lineTo(360, 90);
+        g.lineTo(512, 230);
+        g.lineTo(512, 340);
+        g.lineTo(0, 340);
+        g.closePath();
+        g.fill();
+        g.fillStyle = '#1e293b';
+        g.fillRect(0, 220, 512, 120);
+        g.fillStyle = 'rgba(251, 191, 36, 0.4)';
+        g.fillRect(160, 220, 160, 120);
+      } else {
+        const grad = g.createLinearGradient(0, 0, 512, 340);
+        grad.addColorStop(0, '#1c1917');
+        grad.addColorStop(0.5, '#44281d');
+        grad.addColorStop(1, '#0c0a09');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 512, 340);
+        g.fillStyle = '#1e1b18';
+        g.beginPath();
+        g.arc(256, 120, 50, 0, Math.PI * 2);
+        g.fill();
+        g.beginPath();
+        g.moveTo(170, 320);
+        g.lineTo(210, 170);
+        g.lineTo(302, 170);
+        g.lineTo(342, 320);
+        g.closePath();
+        g.fill();
+        g.fillStyle = '#f59e0b';
+        g.fillRect(250, 250, 12, 25);
+      }
+
+      const pTex = new THREE.CanvasTexture(pc);
+      pTex.userData = { isSharedTexture: true };
+      return pTex;
+    }
+
+    const floorTex = createFloorTexture(theme);
+    const carpetTex = createCarpetTexture(theme);
+    const wallTex = createWallTexture(theme);
+    const tableTex = createTableTexture(theme);
+    const clockDialTex = createClockDialTexture();
+    const paintingTex1 = createPaintingTexture(0);
+    const paintingTex2 = createPaintingTexture(1);
 
     TextureCache[theme] = {
       lightColor,
@@ -220,7 +739,14 @@
       tableColor,
       lightTex,
       darkTex,
-      frameTex
+      frameTex,
+      floorTex,
+      carpetTex,
+      wallTex,
+      tableTex,
+      clockDialTex,
+      paintingTex1,
+      paintingTex2
     };
     return TextureCache[theme];
   }
@@ -731,7 +1257,7 @@
       this.minRadius = 4.5;
       this.maxRadius = 36.0;
       this.minPhi = 0.08;
-      this.maxPhi = Math.PI / 2.05;
+      this.maxPhi = Math.PI / 2.15;
       this.dampingFactor = 0.09;
 
       // Pointer / Raycasting interaction state
@@ -972,18 +1498,6 @@
       this.boardGroup.add(this.labelsGroup);
       this.buildCoordinateLabels();
 
-      // Ground Table / Pedestal below the board
-      const tableGeo = new THREE.CylinderGeometry(14, 14, 0.6, 64);
-      this.tableMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(textures.tableColor),
-        roughness: 0.6,
-        metalness: 0.1
-      });
-      this.tableMesh = new THREE.Mesh(tableGeo, this.tableMat);
-      this.tableMesh.position.y = -0.64;
-      this.tableMesh.receiveShadow = true;
-      this.boardGroup.add(this.tableMesh);
-
       // Master pieces container group
       this.piecesGroup = new THREE.Group();
       this.boardGroup.add(this.piecesGroup);
@@ -992,6 +1506,9 @@
       this.arrowsGroup = new THREE.Group();
       this.arrowsGroup.position.y = 0.011;
       this.boardGroup.add(this.arrowsGroup);
+
+      // Procedural 3D Environment (Realistic table, chairs, tabletop clock, room interior & theme decor)
+      this.initEnvironment(textures);
     }
 
     /**
@@ -1107,6 +1624,648 @@
         mesh.rotation.z = -Math.PI / 2;
         mesh.position.set(4.42, -0.021, -3.5 + row);
         this.labelsGroup.add(mesh);
+      }
+    }
+
+    /**
+     * Initializes the realistic procedural 3D environment container:
+     * Table, chairs, tabletop chess clock, room interior (floor, carpet, walls, ceiling) and theme decor.
+     */
+    initEnvironment(textures) {
+      this.environmentGroup = new THREE.Group();
+      this.environmentGroup.name = 'environmentGroup';
+      this.scene.add(this.environmentGroup);
+
+      this.decorGroup = new THREE.Group();
+      this.decorGroup.name = 'decorGroup';
+      this.environmentGroup.add(this.decorGroup);
+
+      this.buildTable(textures);
+      this.buildChairs(textures);
+      this.buildRoom(textures);
+      this.buildThemeDecor(this.theme);
+    }
+
+    /**
+     * Alias for buildTable for API compatibility
+     */
+    initTable(textures) {
+      return this.buildTable(textures);
+    }
+
+    /**
+     * Builds realistic procedural 3D wooden/marble table with moulded trim, apron skirt,
+     * 4 turned legs reaching down to floor at y = -6.8, and tabletop props (dual-dial chess clock).
+     */
+    buildTable(textures) {
+      this.tableGroup = new THREE.Group();
+      this.tableGroup.name = 'tableGroup';
+      this.environmentGroup.add(this.tableGroup);
+
+      // Main Tabletop Mesh (BoxGeometry 16.0 x 0.50 x 13.6, flush at y = -0.345 beneath frameBaseMesh)
+      const tableGeo = new THREE.BoxGeometry(16.0, 0.50, 13.6);
+      this.tableMat = new THREE.MeshStandardMaterial({
+        map: textures.tableTex,
+        color: new THREE.Color(textures.tableColor),
+        roughness: 0.55,
+        metalness: 0.08
+      });
+      this.tableMesh = new THREE.Mesh(tableGeo, this.tableMat);
+      this.tableMesh.position.set(0, -0.595, 0);
+      this.tableMesh.receiveShadow = true;
+      this.tableMesh.castShadow = true;
+      this.tableGroup.add(this.tableMesh);
+
+      // Moulded Edge Trim
+      const trimGeo = new THREE.BoxGeometry(16.5, 0.16, 14.1);
+      const trimMesh = new THREE.Mesh(trimGeo, this.tableMat);
+      trimMesh.position.set(0, -0.45, 0);
+      trimMesh.receiveShadow = true;
+      trimMesh.castShadow = true;
+      this.tableGroup.add(trimMesh);
+
+      // Under-Table Apron Skirt
+      const skirtGeo = new THREE.BoxGeometry(14.6, 0.60, 12.2);
+      const skirtMesh = new THREE.Mesh(skirtGeo, this.tableMat);
+      skirtMesh.position.set(0, -0.92, 0);
+      skirtMesh.receiveShadow = true;
+      skirtMesh.castShadow = true;
+      this.tableGroup.add(skirtMesh);
+
+      // 4 Turned & Tapered Table Legs (reaching from apron down to floor at y = -6.8)
+      const legGeo = new THREE.CylinderGeometry(0.38, 0.24, 5.95, 16);
+      const footGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 16);
+      const legPositions = [
+        [-6.6, 5.4],
+        [6.6, 5.4],
+        [-6.6, -5.4],
+        [6.6, -5.4]
+      ];
+
+      legPositions.forEach(([lx, lz]) => {
+        const tableLeg = new THREE.Mesh(legGeo, this.tableMat);
+        tableLeg.position.set(lx, -3.825, lz);
+        tableLeg.receiveShadow = true;
+        tableLeg.castShadow = true;
+        this.tableGroup.add(tableLeg);
+
+        const footMesh = new THREE.Mesh(footGeo, this.tableMat);
+        footMesh.position.set(lx, -6.74, lz);
+        footMesh.receiveShadow = true;
+        footMesh.castShadow = true;
+        this.tableGroup.add(footMesh);
+      });
+
+      // Tabletop Decorative 3D Dual-Dial Chess Clock
+      this.buildChessClock(textures);
+    }
+
+    /**
+     * Builds decorative procedural 3D analog chess clock on the table side (x = -5.8, y = -0.12, z = 0)
+     */
+    buildChessClock(textures) {
+      this.clockGroup = new THREE.Group();
+      this.clockGroup.name = 'tabletopChessClock';
+      this.clockGroup.position.set(-5.8, -0.12, 0);
+      this.tableGroup.add(this.clockGroup);
+
+      // Wooden / Matte casing body
+      const bodyGeo = new THREE.BoxGeometry(1.0, 0.45, 2.2);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: this.theme === 'neon' ? 0x121726 : 0x3d2214,
+        roughness: 0.5,
+        metalness: 0.15
+      });
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.castShadow = true;
+      bodyMesh.receiveShadow = true;
+      this.clockGroup.add(bodyMesh);
+
+      // Dual clock dials facing +X towards center board
+      const dialGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.04, 24);
+      dialGeo.rotateZ(Math.PI / 2);
+      const dialMat = new THREE.MeshBasicMaterial({ map: textures.clockDialTex });
+
+      // White dial (z = +0.55) & Black dial (z = -0.55)
+      const dialWhite = new THREE.Mesh(dialGeo, dialMat);
+      dialWhite.position.set(0.50, 0, 0.55);
+      this.clockGroup.add(dialWhite);
+
+      const dialBlack = new THREE.Mesh(dialGeo, dialMat);
+      dialBlack.position.set(0.50, 0, -0.55);
+      this.clockGroup.add(dialBlack);
+
+      // 2 Brass Push Plungers on top
+      const plungerGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.14, 12);
+      const plungerMat = new THREE.MeshStandardMaterial({
+        color: 0xd4af37, // brass / gold
+        roughness: 0.25,
+        metalness: 0.85
+      });
+
+      const plungerWhite = new THREE.Mesh(plungerGeo, plungerMat);
+      plungerWhite.position.set(0, 0.26, 0.55);
+      this.clockGroup.add(plungerWhite);
+
+      const plungerBlack = new THREE.Mesh(plungerGeo, plungerMat);
+      plungerBlack.position.set(0, 0.31, -0.55);
+      this.clockGroup.add(plungerBlack);
+    }
+
+    /**
+     * Builds two procedural player armchairs on White (z = +9.2, facing -Z) and Black (z = -9.2, facing +Z) sides
+     */
+    buildChairs(textures) {
+      this.chairsGroup = new THREE.Group();
+      this.chairsGroup.name = 'playerChairs';
+      this.environmentGroup.add(this.chairsGroup);
+
+      let woodCol = 0x2e1910;
+      let cushionCol = 0x54141b;
+      if (this.theme === 'wood') {
+        woodCol = 0x422617;
+        cushionCol = 0x2d442b; // forest moss green
+      } else if (this.theme === 'marble') {
+        woodCol = 0x242830;
+        cushionCol = 0x1e2c45; // royal navy
+      } else if (this.theme === 'neon') {
+        woodCol = 0x0c0e16;
+        cushionCol = 0x141a29; // dark cyber
+      }
+
+      this.chairWoodMat = new THREE.MeshStandardMaterial({
+        color: woodCol,
+        roughness: 0.55,
+        metalness: 0.08
+      });
+      this.chairCushionMat = new THREE.MeshStandardMaterial({
+        color: cushionCol,
+        roughness: 0.65,
+        metalness: 0.04
+      });
+
+      const createArmchair = () => {
+        const chair = new THREE.Group();
+
+        // Cushioned Seat at y = -3.8
+        const seatGeo = new THREE.BoxGeometry(4.2, 0.50, 4.0);
+        const seatMesh = new THREE.Mesh(seatGeo, this.chairCushionMat);
+        seatMesh.position.set(0, -3.8, 0);
+        seatMesh.receiveShadow = true;
+        seatMesh.castShadow = true;
+        chair.add(seatMesh);
+
+        // Seat Frame Base
+        const frameGeo = new THREE.BoxGeometry(4.2, 0.24, 4.0);
+        const frameMesh = new THREE.Mesh(frameGeo, this.chairWoodMat);
+        frameMesh.position.set(0, -4.15, 0);
+        frameMesh.receiveShadow = true;
+        frameMesh.castShadow = true;
+        chair.add(frameMesh);
+
+        // 4 Chair Legs down to floor at y = -6.8 (height = 2.65, center = -5.475)
+        const chairLegGeo = new THREE.CylinderGeometry(0.14, 0.10, 2.65, 12);
+        const chairLegOffsets = [
+          [-1.8, 1.7],
+          [1.8, 1.7],
+          [-1.8, -1.7],
+          [1.8, -1.7]
+        ];
+        chairLegOffsets.forEach(([cx, cz]) => {
+          const chairLeg = new THREE.Mesh(chairLegGeo, this.chairWoodMat);
+          chairLeg.position.set(cx, -5.475, cz);
+          chairLeg.receiveShadow = true;
+          chairLeg.castShadow = true;
+          chair.add(chairLeg);
+        });
+
+        // Supportive Backrest (rises from seat to y = 0.0)
+        const backrestGeo = new THREE.BoxGeometry(4.2, 3.8, 0.45);
+        const backrestMesh = new THREE.Mesh(backrestGeo, this.chairCushionMat);
+        backrestMesh.position.set(0, -1.9, -1.8);
+        backrestMesh.receiveShadow = true;
+        backrestMesh.castShadow = true;
+        chair.add(backrestMesh);
+
+        // Armrests left and right
+        const armGeo = new THREE.BoxGeometry(0.40, 1.3, 3.4);
+        [-2.0, 2.0].forEach(ax => {
+          const armMesh = new THREE.Mesh(armGeo, this.chairWoodMat);
+          armMesh.position.set(ax, -2.85, 0);
+          armMesh.receiveShadow = true;
+          armMesh.castShadow = true;
+          chair.add(armMesh);
+        });
+
+        return chair;
+      };
+
+      // White player armchair (z = +9.2, facing -Z toward board)
+      const whiteChair = createArmchair();
+      whiteChair.position.set(0, 0, 9.2);
+      whiteChair.rotation.y = Math.PI;
+      this.chairsGroup.add(whiteChair);
+
+      // Black player armchair (z = -9.2, facing +Z toward board)
+      const blackChair = createArmchair();
+      blackChair.position.set(0, 0, -9.2);
+      blackChair.rotation.y = 0;
+      this.chairsGroup.add(blackChair);
+    }
+
+    /**
+     * Builds procedural 3D room interior:
+     * Repeating parquet/marble/timber/cyber floor at y = -6.8, under-table woven carpet at y = -6.78,
+     * 4 enclosing walls (width 68, height 22, center y = 4.2), baseboards, crown moulding, and ceiling at y = +15.2.
+     */
+    buildRoom(textures) {
+      this.roomGroup = new THREE.Group();
+      this.roomGroup.name = 'roomGroup';
+      this.environmentGroup.add(this.roomGroup);
+
+      // Floor at y = -6.8 (68 x 68)
+      const floorGeo = new THREE.PlaneGeometry(68.0, 68.0);
+      floorGeo.rotateX(-Math.PI / 2);
+      this.floorMat = new THREE.MeshStandardMaterial({
+        map: textures.floorTex,
+        roughness: 0.65,
+        metalness: 0.08
+      });
+      this.floorMesh = new THREE.Mesh(floorGeo, this.floorMat);
+      this.floorMesh.position.set(0, -6.8, 0);
+      this.floorMesh.receiveShadow = true;
+      this.roomGroup.add(this.floorMesh);
+
+      // Under-Table Woven Rug / Carpet (22 x 0.04 x 19 at y = -6.78)
+      const carpetGeo = new THREE.BoxGeometry(22.0, 0.04, 19.0);
+      this.carpetMat = new THREE.MeshStandardMaterial({
+        map: textures.carpetTex,
+        roughness: 0.85,
+        metalness: 0.02
+      });
+      this.carpetMesh = new THREE.Mesh(carpetGeo, this.carpetMat);
+      this.carpetMesh.position.set(0, -6.78, 0);
+      this.carpetMesh.receiveShadow = true;
+      this.roomGroup.add(this.carpetMesh);
+
+      // 4 Enclosing Walls (Width 68, Height 22, centered at y = 4.2)
+      this.wallMat = new THREE.MeshStandardMaterial({
+        map: textures.wallTex,
+        roughness: 0.85,
+        metalness: 0.04
+      });
+
+      const wallGeo = new THREE.PlaneGeometry(68.0, 22.0);
+
+      // North Wall (z = -34.0, facing +Z)
+      const northWall = new THREE.Mesh(wallGeo, this.wallMat);
+      northWall.position.set(0, 4.2, -34.0);
+      northWall.receiveShadow = true;
+      this.roomGroup.add(northWall);
+
+      // South Wall (z = +34.0, facing -Z)
+      const southWall = new THREE.Mesh(wallGeo, this.wallMat);
+      southWall.position.set(0, 4.2, 34.0);
+      southWall.rotation.y = Math.PI;
+      southWall.receiveShadow = true;
+      this.roomGroup.add(southWall);
+
+      // West Wall (x = -34.0, facing +X)
+      const westWall = new THREE.Mesh(wallGeo, this.wallMat);
+      westWall.position.set(-34.0, 4.2, 0);
+      westWall.rotation.y = Math.PI / 2;
+      westWall.receiveShadow = true;
+      this.roomGroup.add(westWall);
+
+      // East Wall (x = +34.0, facing -X)
+      const eastWall = new THREE.Mesh(wallGeo, this.wallMat);
+      eastWall.position.set(34.0, 4.2, 0);
+      eastWall.rotation.y = -Math.PI / 2;
+      eastWall.receiveShadow = true;
+      this.roomGroup.add(eastWall);
+
+      // Ceiling at y = +15.2 (facing -Y down into room)
+      const ceilingGeo = new THREE.PlaneGeometry(68.0, 68.0);
+      ceilingGeo.rotateX(Math.PI / 2);
+      const ceilingMat = new THREE.MeshStandardMaterial({
+        color: this.theme === 'neon' ? 0x05070e : (this.theme === 'marble' ? 0xedf0f5 : 0x2d241e),
+        roughness: 0.9,
+        metalness: 0.02
+      });
+      const ceilingMesh = new THREE.Mesh(ceilingGeo, ceilingMat);
+      ceilingMesh.position.set(0, 15.2, 0);
+      this.roomGroup.add(ceilingMesh);
+
+      // Baseboard Plinth running along floor perimeter at y = -6.4
+      const baseboardMat = new THREE.MeshStandardMaterial({
+        color: this.theme === 'neon' ? 0x080c16 : 0x1e150f,
+        roughness: 0.6,
+        metalness: 0.1
+      });
+      const bbN = new THREE.Mesh(new THREE.BoxGeometry(68.0, 0.8, 0.3), baseboardMat);
+      bbN.position.set(0, -6.4, -33.85);
+      this.roomGroup.add(bbN);
+      const bbS = new THREE.Mesh(new THREE.BoxGeometry(68.0, 0.8, 0.3), baseboardMat);
+      bbS.position.set(0, -6.4, 33.85);
+      this.roomGroup.add(bbS);
+      const bbW = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 68.0), baseboardMat);
+      bbW.position.set(-33.85, -6.4, 0);
+      this.roomGroup.add(bbW);
+      const bbE = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 68.0), baseboardMat);
+      bbE.position.set(33.85, -6.4, 0);
+      this.roomGroup.add(bbE);
+    }
+
+    /**
+     * Builds theme-specific procedural 3D room decor on walls and perimeter:
+     * - 'classic': 2 wooden bookshelves with colorful book blocks + 2 framed classical oil paintings
+     * - 'wood': heavy timber ceiling beams + 2 bookshelves + stone fireplace with glowing hearth point light
+     * - 'marble': 8 fluted classical Ionic marble columns with plinths & capitals
+     * - 'neon': 8 glowing vertical neon light pillars (cyan & magenta) + overhead glowing neon halo ring
+     */
+    buildThemeDecor(themeName) {
+      while (this.decorGroup.children.length > 0) {
+        const child = this.decorGroup.children[0];
+        this.disposeObject(child);
+        this.decorGroup.remove(child);
+      }
+
+      const textures = generateThemeTextures(themeName);
+
+      if (themeName === 'classic') {
+        // 1. Two wooden bookshelves with rows of procedural 3D book blocks
+        const makeBookshelf = (bx, bz, rotY) => {
+          const bsGroup = new THREE.Group();
+          bsGroup.position.set(bx, 0, bz);
+          bsGroup.rotation.y = rotY;
+
+          const shelfWoodMat = new THREE.MeshStandardMaterial({
+            color: 0x2c170d,
+            roughness: 0.6,
+            metalness: 0.08
+          });
+
+          const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(8.0, 12.0, 1.6), shelfWoodMat);
+          frameMesh.position.set(0, -0.8, 0);
+          frameMesh.receiveShadow = true;
+          frameMesh.castShadow = true;
+          bsGroup.add(frameMesh);
+
+          const bookColors = [0x7f1d1d, 0x1e3a8a, 0x14532d, 0x78350f, 0x854d0e, 0x3f3f46, 0x581c87];
+          const shelfY = [-3.8, -0.8, 2.2];
+
+          shelfY.forEach((sy, sIdx) => {
+            const board = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.18, 1.4), shelfWoodMat);
+            board.position.set(0, sy, 0.05);
+            board.receiveShadow = true;
+            bsGroup.add(board);
+
+            let curX = -3.4;
+            let bCount = 0;
+            while (curX < 3.2 && bCount < 24) {
+              const bWidth = 0.22 + ((bCount * 7) % 5) * 0.035;
+              const bHeight = 1.35 + ((bCount * 11) % 6) * 0.08;
+              const bMat = new THREE.MeshStandardMaterial({
+                color: bookColors[(sIdx * 3 + bCount) % bookColors.length],
+                roughness: 0.7,
+                metalness: 0.05
+              });
+              const bookMesh = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, 1.1), bMat);
+              bookMesh.position.set(curX + bWidth / 2, sy + bHeight / 2 + 0.09, 0.05);
+              bookMesh.receiveShadow = true;
+              bookMesh.castShadow = true;
+              bsGroup.add(bookMesh);
+              curX += bWidth + 0.03;
+              bCount++;
+            }
+          });
+
+          return bsGroup;
+        };
+
+        this.decorGroup.add(makeBookshelf(-32.6, -8.0, Math.PI / 2));
+        this.decorGroup.add(makeBookshelf(32.6, -8.0, -Math.PI / 2));
+
+        // 2. Framed Classical Oil Paintings with Gold Bevel Frames
+        const makeFramedPainting = (px, py, pz, rotY, tex) => {
+          const paintGroup = new THREE.Group();
+          paintGroup.position.set(px, py, pz);
+          paintGroup.rotation.y = rotY;
+
+          const goldMat = new THREE.MeshStandardMaterial({
+            color: 0xd4af37,
+            roughness: 0.3,
+            metalness: 0.85
+          });
+          const frame = new THREE.Mesh(new THREE.BoxGeometry(9.0, 6.0, 0.4), goldMat);
+          frame.castShadow = true;
+          paintGroup.add(frame);
+
+          const canvasMat = new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.75,
+            metalness: 0.02
+          });
+          const canvasMesh = new THREE.Mesh(new THREE.BoxGeometry(8.2, 5.2, 0.45), canvasMat);
+          paintGroup.add(canvasMesh);
+
+          return paintGroup;
+        };
+
+        this.decorGroup.add(makeFramedPainting(0, 4.5, -33.7, 0, textures.paintingTex1));
+        this.decorGroup.add(makeFramedPainting(0, 4.5, 33.7, Math.PI, textures.paintingTex2));
+
+      } else if (themeName === 'wood') {
+        // 1. Heavy Timber Ceiling Beams
+        const beamMat = new THREE.MeshStandardMaterial({
+          color: 0x3d2012,
+          roughness: 0.7,
+          metalness: 0.05
+        });
+        const beamGeo = new THREE.BoxGeometry(68.0, 1.2, 1.2);
+        [-25, -15, -5, 5, 15, 25].forEach(bz => {
+          const beam = new THREE.Mesh(beamGeo, beamMat);
+          beam.position.set(0, 14.4, bz);
+          beam.receiveShadow = true;
+          beam.castShadow = true;
+          this.decorGroup.add(beam);
+        });
+
+        // 2. Rustic Bookshelf on East wall
+        const rusticShelfMat = new THREE.MeshStandardMaterial({
+          color: 0x482816,
+          roughness: 0.65,
+          metalness: 0.04
+        });
+        const eastShelf = new THREE.Mesh(new THREE.BoxGeometry(8.0, 10.0, 1.8), rusticShelfMat);
+        eastShelf.position.set(32.6, -1.8, 0);
+        eastShelf.rotation.y = -Math.PI / 2;
+        eastShelf.receiveShadow = true;
+        eastShelf.castShadow = true;
+        this.decorGroup.add(eastShelf);
+
+        // 3. Stone Fireplace on West Wall with Glowing Warm Hearth Point Light
+        const fireplaceGroup = new THREE.Group();
+        fireplaceGroup.position.set(-32.0, 0, 0);
+        fireplaceGroup.rotation.y = Math.PI / 2;
+
+        const stoneMat = new THREE.MeshStandardMaterial({
+          color: 0x5a5652,
+          roughness: 0.85,
+          metalness: 0.05
+        });
+        const mantel = new THREE.Mesh(new THREE.BoxGeometry(9.0, 9.5, 3.5), stoneMat);
+        mantel.position.set(0, -2.05, 0);
+        mantel.receiveShadow = true;
+        mantel.castShadow = true;
+        fireplaceGroup.add(mantel);
+
+        const fireboxMat = new THREE.MeshStandardMaterial({
+          color: 0x141210,
+          roughness: 0.95
+        });
+        const firebox = new THREE.Mesh(new THREE.BoxGeometry(5.0, 3.6, 2.5), fireboxMat);
+        firebox.position.set(0, -4.8, 0.6);
+        fireplaceGroup.add(firebox);
+
+        const hearthMat = new THREE.MeshStandardMaterial({
+          color: 0xff3300,
+          emissive: 0xff4400,
+          emissiveIntensity: 1.8,
+          roughness: 0.6
+        });
+        const hearthMesh = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.45, 1.6), hearthMat);
+        hearthMesh.position.set(0, -6.2, 0.6);
+        fireplaceGroup.add(hearthMesh);
+
+        const hearthLight = new THREE.PointLight(0xff7722, 1.4, 25);
+        hearthLight.position.set(0, -5.5, 1.8);
+        fireplaceGroup.add(hearthLight);
+
+        this.decorGroup.add(fireplaceGroup);
+
+      } else if (themeName === 'marble') {
+        // 8 Fluted Classical Marble Ionic Columns with Plinths and Capitals
+        const columnMat = new THREE.MeshStandardMaterial({
+          color: 0xedf0f5,
+          roughness: 0.35,
+          metalness: 0.1
+        });
+        const columnShaftGeo = new THREE.CylinderGeometry(1.2, 1.2, 21.0, 24);
+        const plinthGeo = new THREE.BoxGeometry(3.2, 1.0, 3.2);
+        const capitalGeo = new THREE.BoxGeometry(3.4, 1.2, 3.4);
+
+        const columnLocations = [
+          [-30, 22], [30, 22],
+          [-30, -22], [30, -22],
+          [-30, 0], [30, 0],
+          [-16, -32], [16, -32]
+        ];
+
+        columnLocations.forEach(([cx, cz]) => {
+          const colGroup = new THREE.Group();
+          colGroup.position.set(cx, 0, cz);
+
+          const plinth = new THREE.Mesh(plinthGeo, columnMat);
+          plinth.position.set(0, -6.3, 0);
+          plinth.receiveShadow = true;
+          colGroup.add(plinth);
+
+          const shaft = new THREE.Mesh(columnShaftGeo, columnMat);
+          shaft.position.set(0, 4.2, 0);
+          shaft.receiveShadow = true;
+          shaft.castShadow = true;
+          colGroup.add(shaft);
+
+          const capital = new THREE.Mesh(capitalGeo, columnMat);
+          capital.position.set(0, 14.6, 0);
+          capital.receiveShadow = true;
+          colGroup.add(capital);
+
+          this.decorGroup.add(colGroup);
+        });
+
+      } else if (themeName === 'neon') {
+        // 1. Eight Vertical Glowing Neon Light Pillars (alternating cyan & magenta)
+        const pillarLocations = [
+          [-32, 20, 0x00f0ff], [32, 20, 0xff007f],
+          [-32, -20, 0xff007f], [32, -20, 0x00f0ff],
+          [-32, 7, 0x00f0ff], [32, 7, 0xff007f],
+          [-32, -7, 0xff007f], [32, -7, 0x00f0ff]
+        ];
+
+        const pillarGeo = new THREE.CylinderGeometry(0.35, 0.35, 21.0, 16);
+
+        pillarLocations.forEach(([px, pz, pCol]) => {
+          const pMat = new THREE.MeshStandardMaterial({
+            color: pCol,
+            emissive: pCol,
+            emissiveIntensity: 2.2,
+            roughness: 0.2,
+            metalness: 0.8
+          });
+          const pillar = new THREE.Mesh(pillarGeo, pMat);
+          pillar.position.set(px, 4.2, pz);
+          this.decorGroup.add(pillar);
+
+          const pLight = new THREE.PointLight(pCol, 0.9, 18);
+          pLight.position.set(px > 0 ? px - 1.5 : px + 1.5, 4.2, pz);
+          this.decorGroup.add(pLight);
+        });
+
+        // 2. Overhead Glowing Neon Halo Ring
+        const haloGeo = new THREE.TorusGeometry(14.0, 0.28, 16, 64);
+        haloGeo.rotateX(Math.PI / 2);
+        const haloMat = new THREE.MeshStandardMaterial({
+          color: 0x00f0ff,
+          emissive: 0x00f0ff,
+          emissiveIntensity: 2.5,
+          roughness: 0.2
+        });
+        const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+        haloMesh.position.set(0, 13.5, 0);
+        this.decorGroup.add(haloMesh);
+      }
+    }
+
+    /**
+     * Updates materials of table, floor, carpet, walls, and chairs when theme changes
+     */
+    updateEnvironmentMaterials(textures, themeName) {
+      if (this.tableMat) {
+        this.tableMat.map = textures.tableTex;
+        this.tableMat.color.set(textures.tableColor);
+        this.tableMat.needsUpdate = true;
+      }
+      if (this.floorMat) {
+        this.floorMat.map = textures.floorTex;
+        this.floorMat.needsUpdate = true;
+      }
+      if (this.carpetMat) {
+        this.carpetMat.map = textures.carpetTex;
+        this.carpetMat.needsUpdate = true;
+      }
+      if (this.wallMat) {
+        this.wallMat.map = textures.wallTex;
+        this.wallMat.needsUpdate = true;
+      }
+      if (this.chairWoodMat && this.chairCushionMat) {
+        let woodCol = 0x2e1910;
+        let cushionCol = 0x54141b;
+        if (themeName === 'wood') {
+          woodCol = 0x422617;
+          cushionCol = 0x2d442b;
+        } else if (themeName === 'marble') {
+          woodCol = 0x242830;
+          cushionCol = 0x1e2c45;
+        } else if (themeName === 'neon') {
+          woodCol = 0x0c0e16;
+          cushionCol = 0x141a29;
+        }
+        this.chairWoodMat.color.set(woodCol);
+        this.chairWoodMat.needsUpdate = true;
+        this.chairCushionMat.color.set(cushionCol);
+        this.chairCushionMat.needsUpdate = true;
       }
     }
 
@@ -1878,8 +3037,13 @@
       this.frameMat.map = textures.frameTex;
       this.frameMat.needsUpdate = true;
 
+      this.tableMat.map = textures.tableTex;
       this.tableMat.color.set(textures.tableColor);
       this.tableMat.needsUpdate = true;
+
+      // Update environment materials & theme-specific architectural decor
+      this.updateEnvironmentMaterials(textures, themeName);
+      this.buildThemeDecor(themeName);
 
       // Update coordinate label colors
       this.buildCoordinateLabels();
