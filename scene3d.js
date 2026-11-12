@@ -729,7 +729,7 @@
         phi: Math.PI / 3.4
       };
       this.minRadius = 4.5;
-      this.maxRadius = 24.0;
+      this.maxRadius = 36.0;
       this.minPhi = 0.08;
       this.maxPhi = Math.PI / 2.05;
       this.dampingFactor = 0.09;
@@ -2116,14 +2116,18 @@
       }
 
       const { radius, theta, phi } = this.cameraSpherical;
+      const aspect = (this.camera && this.camera.aspect) ? this.camera.aspect : 1.0;
+      const portraitScale = aspect < 1.0 ? Math.min(2.6, 1.06 / aspect) : 1.0;
+      const effectiveRadius = radius * portraitScale;
+
       const sinPhi = Math.sin(phi);
       const cosPhi = Math.cos(phi);
       const sinTheta = Math.sin(theta);
       const cosTheta = Math.cos(theta);
 
-      this.camera.position.x = this.cameraTarget.x + radius * sinPhi * sinTheta;
-      this.camera.position.y = this.cameraTarget.y + radius * cosPhi;
-      this.camera.position.z = this.cameraTarget.z + radius * sinPhi * cosTheta;
+      this.camera.position.x = this.cameraTarget.x + effectiveRadius * sinPhi * sinTheta;
+      this.camera.position.y = this.cameraTarget.y + effectiveRadius * cosPhi;
+      this.camera.position.z = this.cameraTarget.z + effectiveRadius * sinPhi * cosTheta;
       this.camera.lookAt(this.cameraTarget);
     }
 
@@ -2502,6 +2506,7 @@
       this.renderer.setSize(width, height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       this.updateCanvasRect();
+      this.updateCameraPosition(true);
       this.requestRender(false);
     }
 

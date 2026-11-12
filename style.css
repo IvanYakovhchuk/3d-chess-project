@@ -1170,32 +1170,130 @@ input:checked + .slider:before {
 }
 
 /* ==========================================================================
-   Responsive Adaptations
+   Responsive Adaptations (Polished Mobile Chess App Layout)
    ========================================================================== */
 @media (max-width: 900px) {
   .hud-body {
+    flex: 1;
+    display: flex;
     flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+    min-height: 0;
   }
   
   .players-column {
+    flex: 1;
     width: 100%;
-    flex-direction: row;
-    gap: 10px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
   }
   
+  /* Top Player Bar (Black) & Bottom Player Bar (White) */
   .player-card {
-    flex: 1;
+    width: 100%;
+    max-width: 100%;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    pointer-events: auto;
+    box-sizing: border-box;
   }
 
-  .camera-pill-bar {
+  .player-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .player-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .player-info {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    flex: 1;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .player-name-row {
+    flex-shrink: 0;
+    gap: 4px;
+  }
+
+  .player-name {
+    font-size: 0.85rem;
+  }
+
+  .player-role-badge {
     display: none;
+  }
+
+  .material-row {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    gap: 4px;
+  }
+
+  .captured-tray {
+    flex: 1;
+    min-height: 22px;
+    padding: 2px 4px;
+    margin: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .player-clock-container {
+    flex-shrink: 0;
+  }
+
+  .player-clock {
+    font-size: 0.95rem;
+    padding: 4px 8px;
+    min-width: 58px;
+  }
+
+  /* Keep camera-pill-bar visible and compact at bottom center */
+  .camera-pill-bar {
+    display: flex !important;
+    align-self: center;
+    margin-top: 6px;
+    padding: 4px 8px;
+    gap: 4px;
+    pointer-events: auto;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .pill-label {
+    display: none;
+  }
+
+  .pill-btn {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    white-space: nowrap;
   }
   
   .game-sidebar {
     position: fixed;
-    top: calc(var(--header-height) + 24px);
-    right: 14px;
-    bottom: 14px;
+    top: calc(var(--header-height) + 12px);
+    right: 10px;
+    bottom: 10px;
     z-index: 50;
     transform: translateX(110%);
     transition: transform var(--transition-normal);
@@ -1210,32 +1308,82 @@ input:checked + .slider:before {
   }
 }
 
-@media (max-width: 600px) {
-  .hud-overlay {
-    padding: 8px;
+@media (max-width: 768px) {
+  .hud-topbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 6px;
+    padding: 0;
+    height: auto;
+    min-height: 44px;
   }
 
-  .brand-sub {
+  .header-left-island {
+    padding: 5px 10px;
+    min-height: 40px;
+    gap: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .header-right-island {
+    padding: 5px 8px;
+    min-height: 40px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .mode-btn {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+
+  #theme-selector {
+    max-width: 92px;
+    padding: 4px 20px 4px 6px;
+    font-size: 0.72rem;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hud-overlay {
+    padding: 6px;
+  }
+
+  .brand-text,
+  .brand-sub,
+  .banner-sub {
     display: none;
   }
 
-  .status-banner {
-    position: static;
-    transform: none;
-    order: 3;
-    width: 100%;
-    margin-top: 8px;
-    justify-content: center;
+  .header-divider {
+    height: 18px;
   }
 
-  .hud-topbar {
-    flex-wrap: wrap;
-    height: auto;
-    padding: 12px;
+  .status-banner {
+    padding: 3px 8px;
+    gap: 5px;
+  }
+
+  .banner-icon-container {
+    font-size: 1.1rem;
+  }
+
+  .banner-main {
+    font-size: 0.8rem;
+    white-space: nowrap;
   }
   
   .game-sidebar {
-    width: calc(100vw - 20px);
-    right: 10px;
+    width: calc(100vw - 12px);
+    right: 6px;
   }
 }
