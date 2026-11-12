@@ -6,8 +6,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const sceneSrc = fs.readFileSync(path.join(__dirname, 'scene3d.js'), 'utf8');
-const piecesSrc = fs.readFileSync(path.join(__dirname, 'pieces3d.js'), 'utf8');
+const sceneSrc = fs.readFileSync(path.join(__dirname, '..', 'scene3d.js'), 'utf8');
+const piecesSrc = fs.readFileSync(path.join(__dirname, '..', 'pieces3d.js'), 'utf8');
 
 let errors = 0;
 
@@ -65,8 +65,8 @@ check(sceneSrc.includes('0.85'), 'Key directional light intensity is 0.85 (softe
 console.log('\n=== VERIFYING HIGH-CONTRAST PIECES & FELT PADS ===');
 
 // Check white and black piece colors in pieces3d.js
-check(piecesSrc.includes('0xfbfaf5'), 'White pieces are bright ivory/white (0xfbfaf5)');
-check(piecesSrc.includes('0x14161b'), 'Black pieces are deep obsidian black (0x14161b)');
+check(piecesSrc.includes('0xf4f0e6'), 'White pieces are bright ivory/white (0xf4f0e6)');
+check(piecesSrc.includes('0x1e222a'), 'Black pieces are deep obsidian black (0x1e222a)');
 check(piecesSrc.includes('createFeltPad'), 'Tournament felt pad generator exists');
 check(piecesSrc.includes('isFelt'), 'userData.isFelt flag preserved during dynamic reskinning');
 

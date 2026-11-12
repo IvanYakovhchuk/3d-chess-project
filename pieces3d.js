@@ -48,11 +48,13 @@
   let currentTheme = 'classic';
   let currentMode = '3d';
 
-  // Texture and material caches
+  // Texture, material, and geometry caches
   const textureCache = new Map();
   const texture2DCache = new Map();
   const materialCache = new Map();
   const outlineMaterialCache = new Map();
+  const slotMaterialCache = new Map();
+  const geometryCache = new Map();
 
   /**
    * Helper: Normalize piece type to lowercase ('p', 'r', 'n', 'b', 'q', 'k')
@@ -279,6 +281,7 @@
       }
     }
 
+    material.userData = { isSharedMaterial: true };
     materialCache.set(cacheKey, material);
     return material;
   }
@@ -332,12 +335,19 @@
       roughness: 0.95,
       metalness: 0.0
     });
+    feltMaterialCache.userData = { isSharedMaterial: true };
     return feltMaterialCache;
   }
 
   function createFeltPad(radius) {
     const THREE = getTHREE();
-    const geom = new THREE.CylinderGeometry(radius * 0.96, radius * 0.96, 0.005, 32);
+    const cacheKey = `felt_${radius}`;
+    let geom = geometryCache.get(cacheKey);
+    if (!geom) {
+      geom = new THREE.CylinderGeometry(radius * 0.96, radius * 0.96, 0.005, 24);
+      geom.userData = { isSharedGeometry: true };
+      geometryCache.set(cacheKey, geom);
+    }
     const mesh = new THREE.Mesh(geom);
     mesh.position.y = 0.0025;
     mesh.userData.isFelt = true;
@@ -370,6 +380,7 @@
       metalness: 0.20,
       side: THREE.DoubleSide
     });
+    mat.userData = { isSharedMaterial: true };
 
     outlineMaterialCache.set(key, mat);
     return mat;
@@ -395,7 +406,13 @@
     const outlineMat = getOutlineMaterial(color, theme);
 
     // 1. Base trim ring at y = 0.018
-    const baseTrimGeom = new THREE.TorusGeometry(spec.baseR * 1.005, 0.013, 12, 32);
+    const baseKey = `trim_base_${t}`;
+    let baseTrimGeom = geometryCache.get(baseKey);
+    if (!baseTrimGeom) {
+      baseTrimGeom = new THREE.TorusGeometry(spec.baseR * 1.005, 0.013, 12, 24);
+      baseTrimGeom.userData = { isSharedGeometry: true };
+      geometryCache.set(baseKey, baseTrimGeom);
+    }
     const baseTrim = new THREE.Mesh(baseTrimGeom, outlineMat);
     baseTrim.rotation.x = Math.PI / 2;
     baseTrim.position.y = 0.018;
@@ -405,7 +422,13 @@
     pieceGroup.add(baseTrim);
 
     // 2. Collar / waist accent ring at piece's collar height
-    const collarTrimGeom = new THREE.TorusGeometry(spec.collarR * 1.01, 0.011, 12, 32);
+    const collarKey = `trim_collar_${t}`;
+    let collarTrimGeom = geometryCache.get(collarKey);
+    if (!collarTrimGeom) {
+      collarTrimGeom = new THREE.TorusGeometry(spec.collarR * 1.01, 0.011, 12, 24);
+      collarTrimGeom.userData = { isSharedGeometry: true };
+      geometryCache.set(collarKey, collarTrimGeom);
+    }
     const collarTrim = new THREE.Mesh(collarTrimGeom, outlineMat);
     collarTrim.rotation.x = Math.PI / 2;
     collarTrim.position.y = spec.collarY;
@@ -430,23 +453,33 @@
     group.add(createFeltPad(0.27));
 
     // Turned base, stem, and neck collar
-    const pts = createStauntonBasePoints(0.27, 0.24);
-    // Tapered column to neck
-    pts.push(new THREE.Vector2(0.165, 0.35));
-    pts.push(new THREE.Vector2(0.135, 0.48));
-    pts.push(new THREE.Vector2(0.115, 0.58));
-    // Neck collar bead
-    pts.push(new THREE.Vector2(0.170, 0.61));
-    pts.push(new THREE.Vector2(0.170, 0.63));
-    pts.push(new THREE.Vector2(0.110, 0.65));
-    pts.push(new THREE.Vector2(0.090, 0.68));
+    let stemGeom = geometryCache.get('pawn_stem');
+    if (!stemGeom) {
+      const pts = createStauntonBasePoints(0.27, 0.24);
+      // Tapered column to neck
+      pts.push(new THREE.Vector2(0.165, 0.35));
+      pts.push(new THREE.Vector2(0.135, 0.48));
+      pts.push(new THREE.Vector2(0.115, 0.58));
+      // Neck collar bead
+      pts.push(new THREE.Vector2(0.170, 0.61));
+      pts.push(new THREE.Vector2(0.170, 0.63));
+      pts.push(new THREE.Vector2(0.110, 0.65));
+      pts.push(new THREE.Vector2(0.090, 0.68));
 
-    const stemGeom = new THREE.LatheGeometry(pts, 32);
-    stemGeom.computeVertexNormals();
+      stemGeom = new THREE.LatheGeometry(pts, 24);
+      stemGeom.computeVertexNormals();
+      stemGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('pawn_stem', stemGeom);
+    }
     group.add(new THREE.Mesh(stemGeom));
 
     // Spherical head
-    const headGeom = new THREE.SphereGeometry(0.165, 32, 24);
+    let headGeom = geometryCache.get('pawn_head');
+    if (!headGeom) {
+      headGeom = new THREE.SphereGeometry(0.165, 24, 20);
+      headGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('pawn_head', headGeom);
+    }
     const headMesh = new THREE.Mesh(headGeom);
     headMesh.position.y = 0.81;
     group.add(headMesh);
@@ -465,24 +498,34 @@
     group.add(createFeltPad(0.30));
 
     // Turned tower base, column, and upper flared parapet cornice
-    const pts = createStauntonBasePoints(0.30, 0.25);
-    pts.push(new THREE.Vector2(0.210, 0.32));
-    pts.push(new THREE.Vector2(0.200, 0.55));
-    pts.push(new THREE.Vector2(0.195, 0.78));
-    pts.push(new THREE.Vector2(0.220, 0.86));
-    pts.push(new THREE.Vector2(0.280, 0.96));
-    pts.push(new THREE.Vector2(0.285, 1.02));
-    // Recessed tower deck
-    pts.push(new THREE.Vector2(0.190, 1.02));
-    pts.push(new THREE.Vector2(0.185, 0.98));
-    pts.push(new THREE.Vector2(0, 0.98));
+    let towerGeom = geometryCache.get('rook_tower');
+    if (!towerGeom) {
+      const pts = createStauntonBasePoints(0.30, 0.25);
+      pts.push(new THREE.Vector2(0.210, 0.32));
+      pts.push(new THREE.Vector2(0.200, 0.55));
+      pts.push(new THREE.Vector2(0.195, 0.78));
+      pts.push(new THREE.Vector2(0.220, 0.86));
+      pts.push(new THREE.Vector2(0.280, 0.96));
+      pts.push(new THREE.Vector2(0.285, 1.02));
+      // Recessed tower deck
+      pts.push(new THREE.Vector2(0.190, 1.02));
+      pts.push(new THREE.Vector2(0.185, 0.98));
+      pts.push(new THREE.Vector2(0, 0.98));
 
-    const towerGeom = new THREE.LatheGeometry(pts, 32);
-    towerGeom.computeVertexNormals();
+      towerGeom = new THREE.LatheGeometry(pts, 24);
+      towerGeom.computeVertexNormals();
+      towerGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('rook_tower', towerGeom);
+    }
     group.add(new THREE.Mesh(towerGeom));
 
     // 4 Castle Crenellations (Merlons) on top of the rim (y=1.02 to y=1.20)
-    const merlonGeom = new THREE.BoxGeometry(0.135, 0.18, 0.08);
+    let merlonGeom = geometryCache.get('rook_merlon');
+    if (!merlonGeom) {
+      merlonGeom = new THREE.BoxGeometry(0.135, 0.18, 0.08);
+      merlonGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('rook_merlon', merlonGeom);
+    }
     const merlonRadius = 0.235;
 
     for (let i = 0; i < 4; i++) {
@@ -512,60 +555,75 @@
     group.add(createFeltPad(0.30));
 
     // Turned pedestal base
-    const pts = createStauntonBasePoints(0.30, 0.28);
-    pts.push(new THREE.Vector2(0.21, 0.29));
-    pts.push(new THREE.Vector2(0, 0.29));
+    let baseGeom = geometryCache.get('knight_base');
+    if (!baseGeom) {
+      const pts = createStauntonBasePoints(0.30, 0.28);
+      pts.push(new THREE.Vector2(0.21, 0.29));
+      pts.push(new THREE.Vector2(0, 0.29));
 
-    const baseGeom = new THREE.LatheGeometry(pts, 32);
-    baseGeom.computeVertexNormals();
+      baseGeom = new THREE.LatheGeometry(pts, 24);
+      baseGeom.computeVertexNormals();
+      baseGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('knight_base', baseGeom);
+    }
     group.add(new THREE.Mesh(baseGeom));
 
     // Horse Head & Neck: 2D side profile extruded with bevel
-    const shape = new THREE.Shape();
-    // Start at rear base of neck
-    shape.moveTo(0.15, 0.28);
-    // Arched neck crest going up to poll of skull
-    shape.quadraticCurveTo(0.17, 0.50, 0.16, 0.65);
-    shape.quadraticCurveTo(0.14, 0.85, 0.07, 1.02);
-    shape.quadraticCurveTo(0.01, 1.14, -0.04, 1.18);
-    // Brow line and nose bridge (horse faces -Z)
-    shape.lineTo(-0.11, 1.14);
-    shape.quadraticCurveTo(-0.18, 1.04, -0.22, 0.94);
-    shape.lineTo(-0.27, 0.83); // snout apex
-    // Upper lip, mouth cleft, chin
-    shape.lineTo(-0.25, 0.77);
-    shape.lineTo(-0.20, 0.78);
-    shape.lineTo(-0.20, 0.73);
-    // Under-jaw (ganache curve) and throat back down to chest
-    shape.quadraticCurveTo(-0.14, 0.66, -0.10, 0.55);
-    shape.quadraticCurveTo(-0.07, 0.44, -0.13, 0.38);
-    shape.lineTo(-0.14, 0.28);
-    shape.closePath();
+    let headExtrudeGeom = geometryCache.get('knight_head_extrude');
+    if (!headExtrudeGeom) {
+      const shape = new THREE.Shape();
+      // Start at rear base of neck
+      shape.moveTo(0.15, 0.28);
+      // Arched neck crest going up to poll of skull
+      shape.quadraticCurveTo(0.17, 0.50, 0.16, 0.65);
+      shape.quadraticCurveTo(0.14, 0.85, 0.07, 1.02);
+      shape.quadraticCurveTo(0.01, 1.14, -0.04, 1.18);
+      // Brow line and nose bridge (horse faces -Z)
+      shape.lineTo(-0.11, 1.14);
+      shape.quadraticCurveTo(-0.18, 1.04, -0.22, 0.94);
+      shape.lineTo(-0.27, 0.83); // snout apex
+      // Upper lip, mouth cleft, chin
+      shape.lineTo(-0.25, 0.77);
+      shape.lineTo(-0.20, 0.78);
+      shape.lineTo(-0.20, 0.73);
+      // Under-jaw (ganache curve) and throat back down to chest
+      shape.quadraticCurveTo(-0.14, 0.66, -0.10, 0.55);
+      shape.quadraticCurveTo(-0.07, 0.44, -0.13, 0.38);
+      shape.lineTo(-0.14, 0.28);
+      shape.closePath();
 
-    const depth = 0.13;
-    const extrudeSettings = {
-      depth: depth,
-      bevelEnabled: true,
-      bevelThickness: 0.04,
-      bevelSize: 0.04,
-      bevelSegments: 4
-    };
+      const depth = 0.13;
+      const extrudeSettings = {
+        depth: depth,
+        bevelEnabled: true,
+        bevelThickness: 0.04,
+        bevelSize: 0.04,
+        bevelSegments: 4
+      };
 
-    const headExtrudeGeom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    // Transform so shape (z, y) maps to 3D: X = extrude depth (centered), Y = Y, Z = shape X (facing -Z)
-    headExtrudeGeom.applyMatrix4(new THREE.Matrix4().set(
-      0, 0, 1, 0,
-      0, 1, 0, 0,
-      1, 0, 0, 0,
-      0, 0, 0, 1
-    ));
-    headExtrudeGeom.translate(-(depth + 0.04) / 2, 0, 0);
-    headExtrudeGeom.computeVertexNormals();
+      headExtrudeGeom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      // Transform so shape (z, y) maps to 3D: X = extrude depth (centered), Y = Y, Z = shape X (facing -Z)
+      headExtrudeGeom.applyMatrix4(new THREE.Matrix4().set(
+        0, 0, 1, 0,
+        0, 1, 0, 0,
+        1, 0, 0, 0,
+        0, 0, 0, 1
+      ));
+      headExtrudeGeom.translate(-(depth + 0.04) / 2, 0, 0);
+      headExtrudeGeom.computeVertexNormals();
+      headExtrudeGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('knight_head_extrude', headExtrudeGeom);
+    }
     group.add(new THREE.Mesh(headExtrudeGeom));
 
     // Perked Pointed Ears (Facing forward & slightly flared)
-    const earGeom = new THREE.ConeGeometry(0.034, 0.14, 6);
-    earGeom.computeVertexNormals();
+    let earGeom = geometryCache.get('knight_ear');
+    if (!earGeom) {
+      earGeom = new THREE.ConeGeometry(0.034, 0.14, 6);
+      earGeom.computeVertexNormals();
+      earGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('knight_ear', earGeom);
+    }
 
     const leftEar = new THREE.Mesh(earGeom);
     leftEar.position.set(-0.062, 1.22, -0.04);
@@ -584,7 +642,12 @@
       { y: 0.90, z: 0.145 },
       { y: 1.06, z: 0.080 }
     ];
-    const maneGeom = new THREE.BoxGeometry(0.08, 0.08, 0.06);
+    let maneGeom = geometryCache.get('knight_mane');
+    if (!maneGeom) {
+      maneGeom = new THREE.BoxGeometry(0.08, 0.08, 0.06);
+      maneGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('knight_mane', maneGeom);
+    }
 
     for (const m of manePositions) {
       const maneMesh = new THREE.Mesh(maneGeom);
@@ -594,7 +657,12 @@
     }
 
     // Sculpted Eyes (tagged isOutline for contrasting accent)
-    const eyeGeom = new THREE.SphereGeometry(0.024, 12, 12);
+    let eyeGeom = geometryCache.get('knight_eye');
+    if (!eyeGeom) {
+      eyeGeom = new THREE.SphereGeometry(0.024, 10, 10);
+      eyeGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('knight_eye', eyeGeom);
+    }
     const leftEye = new THREE.Mesh(eyeGeom);
     leftEye.position.set(-0.11, 1.02, -0.13);
     leftEye.userData.isOutline = true;
@@ -606,7 +674,12 @@
     group.add(rightEye);
 
     // Sculpted Nostrils (tagged isOutline for contrasting accent)
-    const nostrilGeom = new THREE.SphereGeometry(0.016, 8, 8);
+    let nostrilGeom = geometryCache.get('knight_nostril');
+    if (!nostrilGeom) {
+      nostrilGeom = new THREE.SphereGeometry(0.016, 8, 8);
+      nostrilGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('knight_nostril', nostrilGeom);
+    }
     const leftNostril = new THREE.Mesh(nostrilGeom);
     leftNostril.position.set(-0.045, 0.82, -0.26);
     leftNostril.userData.isOutline = true;
@@ -632,33 +705,43 @@
     group.add(createFeltPad(0.30));
 
     // Turned base, slender column, and double collar
-    const pts = createStauntonBasePoints(0.30, 0.24);
-    pts.push(new THREE.Vector2(0.170, 0.38));
-    pts.push(new THREE.Vector2(0.140, 0.58));
-    pts.push(new THREE.Vector2(0.120, 0.72));
-    // Double collar cushion
-    pts.push(new THREE.Vector2(0.180, 0.75));
-    pts.push(new THREE.Vector2(0.210, 0.79));
-    pts.push(new THREE.Vector2(0.190, 0.83));
-    pts.push(new THREE.Vector2(0.135, 0.86));
+    let mitreGeom = geometryCache.get('bishop_mitre');
+    if (!mitreGeom) {
+      const pts = createStauntonBasePoints(0.30, 0.24);
+      pts.push(new THREE.Vector2(0.170, 0.38));
+      pts.push(new THREE.Vector2(0.140, 0.58));
+      pts.push(new THREE.Vector2(0.120, 0.72));
+      // Double collar cushion
+      pts.push(new THREE.Vector2(0.180, 0.75));
+      pts.push(new THREE.Vector2(0.210, 0.79));
+      pts.push(new THREE.Vector2(0.190, 0.83));
+      pts.push(new THREE.Vector2(0.135, 0.86));
 
-    // Mitre body (teardrop bulb)
-    pts.push(new THREE.Vector2(0.195, 0.96));
-    pts.push(new THREE.Vector2(0.235, 1.10)); // maximum belly
-    pts.push(new THREE.Vector2(0.220, 1.22));
-    pts.push(new THREE.Vector2(0.160, 1.34));
-    pts.push(new THREE.Vector2(0.090, 1.41));
-    pts.push(new THREE.Vector2(0.040, 1.45));
-    pts.push(new THREE.Vector2(0.010, 1.47));
-    pts.push(new THREE.Vector2(0, 1.47));
+      // Mitre body (teardrop bulb)
+      pts.push(new THREE.Vector2(0.195, 0.96));
+      pts.push(new THREE.Vector2(0.235, 1.10)); // maximum belly
+      pts.push(new THREE.Vector2(0.220, 1.22));
+      pts.push(new THREE.Vector2(0.160, 1.34));
+      pts.push(new THREE.Vector2(0.090, 1.41));
+      pts.push(new THREE.Vector2(0.040, 1.45));
+      pts.push(new THREE.Vector2(0.010, 1.47));
+      pts.push(new THREE.Vector2(0, 1.47));
 
-    const mitreGeom = new THREE.LatheGeometry(pts, 32);
-    mitreGeom.computeVertexNormals();
+      mitreGeom = new THREE.LatheGeometry(pts, 24);
+      mitreGeom.computeVertexNormals();
+      mitreGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('bishop_mitre', mitreGeom);
+    }
     group.add(new THREE.Mesh(mitreGeom));
 
     // Iconic Diagonal Slot (angled Staunton cleft)
     // Modeled as an inset dark bevel cut into the upper mitre
-    const slotGeom = new THREE.BoxGeometry(0.035, 0.16, 0.28);
+    let slotGeom = geometryCache.get('bishop_slot');
+    if (!slotGeom) {
+      slotGeom = new THREE.BoxGeometry(0.035, 0.16, 0.28);
+      slotGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('bishop_slot', slotGeom);
+    }
     const slotMesh = new THREE.Mesh(slotGeom);
     slotMesh.position.set(0.11, 1.25, 0);
     slotMesh.rotation.z = Math.PI / 4; // 45 degree diagonal slice
@@ -667,7 +750,12 @@
     group.add(slotMesh);
 
     // Apex Finial Orb atop the mitre
-    const orbGeom = new THREE.SphereGeometry(0.048, 20, 20);
+    let orbGeom = geometryCache.get('bishop_orb');
+    if (!orbGeom) {
+      orbGeom = new THREE.SphereGeometry(0.048, 20, 16);
+      orbGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('bishop_orb', orbGeom);
+    }
     const orbMesh = new THREE.Mesh(orbGeom);
     orbMesh.position.y = 1.51;
     group.add(orbMesh);
@@ -686,35 +774,50 @@
     group.add(createFeltPad(0.33));
 
     // Turned base, stem, platform, and flaring coronet cup
-    const pts = createStauntonBasePoints(0.33, 0.26);
-    pts.push(new THREE.Vector2(0.180, 0.48));
-    pts.push(new THREE.Vector2(0.150, 0.72));
-    pts.push(new THREE.Vector2(0.140, 0.90));
-    // Platform collar
-    pts.push(new THREE.Vector2(0.220, 0.95));
-    pts.push(new THREE.Vector2(0.240, 1.00));
-    pts.push(new THREE.Vector2(0.190, 1.05));
-    // Flaring coronet bowl
-    pts.push(new THREE.Vector2(0.210, 1.05));
-    pts.push(new THREE.Vector2(0.260, 1.25));
-    pts.push(new THREE.Vector2(0.295, 1.50));
-    pts.push(new THREE.Vector2(0.275, 1.50));
-    pts.push(new THREE.Vector2(0.200, 1.38));
-    // Inner dome rising inside coronet bowl
-    pts.push(new THREE.Vector2(0.190, 1.42));
-    pts.push(new THREE.Vector2(0.150, 1.54));
-    pts.push(new THREE.Vector2(0.060, 1.63));
-    pts.push(new THREE.Vector2(0.035, 1.66));
-    pts.push(new THREE.Vector2(0, 1.66));
+    let bodyGeom = geometryCache.get('queen_body');
+    if (!bodyGeom) {
+      const pts = createStauntonBasePoints(0.33, 0.26);
+      pts.push(new THREE.Vector2(0.180, 0.48));
+      pts.push(new THREE.Vector2(0.150, 0.72));
+      pts.push(new THREE.Vector2(0.140, 0.90));
+      // Platform collar
+      pts.push(new THREE.Vector2(0.220, 0.95));
+      pts.push(new THREE.Vector2(0.240, 1.00));
+      pts.push(new THREE.Vector2(0.190, 1.05));
+      // Flaring coronet bowl
+      pts.push(new THREE.Vector2(0.210, 1.05));
+      pts.push(new THREE.Vector2(0.260, 1.25));
+      pts.push(new THREE.Vector2(0.295, 1.50));
+      pts.push(new THREE.Vector2(0.275, 1.50));
+      pts.push(new THREE.Vector2(0.200, 1.38));
+      // Inner dome rising inside coronet bowl
+      pts.push(new THREE.Vector2(0.190, 1.42));
+      pts.push(new THREE.Vector2(0.150, 1.54));
+      pts.push(new THREE.Vector2(0.060, 1.63));
+      pts.push(new THREE.Vector2(0.035, 1.66));
+      pts.push(new THREE.Vector2(0, 1.66));
 
-    const bodyGeom = new THREE.LatheGeometry(pts, 32);
-    bodyGeom.computeVertexNormals();
+      bodyGeom = new THREE.LatheGeometry(pts, 24);
+      bodyGeom.computeVertexNormals();
+      bodyGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('queen_body', bodyGeom);
+    }
     group.add(new THREE.Mesh(bodyGeom));
 
     // 8 Coronet Rim Pearls with supporting petal tips
     const pearlRadius = 0.290;
-    const pearlGeom = new THREE.SphereGeometry(0.032, 14, 14);
-    const petalGeom = new THREE.ConeGeometry(0.030, 0.06, 4);
+    let pearlGeom = geometryCache.get('queen_pearl');
+    if (!pearlGeom) {
+      pearlGeom = new THREE.SphereGeometry(0.032, 14, 12);
+      pearlGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('queen_pearl', pearlGeom);
+    }
+    let petalGeom = geometryCache.get('queen_petal');
+    if (!petalGeom) {
+      petalGeom = new THREE.ConeGeometry(0.030, 0.06, 4);
+      petalGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('queen_petal', petalGeom);
+    }
 
     for (let i = 0; i < 8; i++) {
       const angle = (i * Math.PI * 2) / 8;
@@ -734,7 +837,12 @@
     }
 
     // Apex Finial Pearl Orb
-    const apexGeom = new THREE.SphereGeometry(0.062, 20, 20);
+    let apexGeom = geometryCache.get('queen_apex');
+    if (!apexGeom) {
+      apexGeom = new THREE.SphereGeometry(0.062, 20, 16);
+      apexGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('queen_apex', apexGeom);
+    }
     const apexMesh = new THREE.Mesh(apexGeom);
     apexMesh.position.y = 1.74;
     group.add(apexMesh);
@@ -753,56 +861,86 @@
     group.add(createFeltPad(0.35));
 
     // Turned base, shaft, double gallery collar, and cupola
-    const pts = createStauntonBasePoints(0.35, 0.28);
-    pts.push(new THREE.Vector2(0.190, 0.55));
-    pts.push(new THREE.Vector2(0.165, 0.85));
-    pts.push(new THREE.Vector2(0.155, 1.04));
-    // Gallery collars
-    pts.push(new THREE.Vector2(0.240, 1.09));
-    pts.push(new THREE.Vector2(0.260, 1.15));
-    pts.push(new THREE.Vector2(0.210, 1.20));
-    // Cupola bowl
-    pts.push(new THREE.Vector2(0.270, 1.40));
-    pts.push(new THREE.Vector2(0.305, 1.58));
-    pts.push(new THREE.Vector2(0.280, 1.58));
-    pts.push(new THREE.Vector2(0.210, 1.48));
-    // Inner dome
-    pts.push(new THREE.Vector2(0.190, 1.52));
-    pts.push(new THREE.Vector2(0.140, 1.64));
-    pts.push(new THREE.Vector2(0.060, 1.72));
-    pts.push(new THREE.Vector2(0.045, 1.75));
-    pts.push(new THREE.Vector2(0, 1.75));
+    let kingBodyGeom = geometryCache.get('king_body');
+    if (!kingBodyGeom) {
+      const pts = createStauntonBasePoints(0.35, 0.28);
+      pts.push(new THREE.Vector2(0.190, 0.55));
+      pts.push(new THREE.Vector2(0.165, 0.85));
+      pts.push(new THREE.Vector2(0.155, 1.04));
+      // Gallery collars
+      pts.push(new THREE.Vector2(0.240, 1.09));
+      pts.push(new THREE.Vector2(0.260, 1.15));
+      pts.push(new THREE.Vector2(0.210, 1.20));
+      // Cupola bowl
+      pts.push(new THREE.Vector2(0.270, 1.40));
+      pts.push(new THREE.Vector2(0.305, 1.58));
+      pts.push(new THREE.Vector2(0.280, 1.58));
+      pts.push(new THREE.Vector2(0.210, 1.48));
+      // Inner dome
+      pts.push(new THREE.Vector2(0.190, 1.52));
+      pts.push(new THREE.Vector2(0.140, 1.64));
+      pts.push(new THREE.Vector2(0.060, 1.72));
+      pts.push(new THREE.Vector2(0.045, 1.75));
+      pts.push(new THREE.Vector2(0, 1.75));
 
-    const kingBodyGeom = new THREE.LatheGeometry(pts, 32);
-    kingBodyGeom.computeVertexNormals();
+      kingBodyGeom = new THREE.LatheGeometry(pts, 24);
+      kingBodyGeom.computeVertexNormals();
+      kingBodyGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('king_body', kingBodyGeom);
+    }
     group.add(new THREE.Mesh(kingBodyGeom));
 
     // Turned Pedestal Orb for Cross
-    const orbGeom = new THREE.SphereGeometry(0.045, 16, 16);
+    let orbGeom = geometryCache.get('king_orb');
+    if (!orbGeom) {
+      orbGeom = new THREE.SphereGeometry(0.045, 16, 14);
+      orbGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('king_orb', orbGeom);
+    }
     const orbMesh = new THREE.Mesh(orbGeom);
     orbMesh.position.y = 1.76;
     group.add(orbMesh);
 
     // 3D Cross Pattée Finial
     // Vertical cross beam
-    const vertBeamGeom = new THREE.BoxGeometry(0.065, 0.23, 0.045);
+    let vertBeamGeom = geometryCache.get('king_vert_beam');
+    if (!vertBeamGeom) {
+      vertBeamGeom = new THREE.BoxGeometry(0.065, 0.23, 0.045);
+      vertBeamGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('king_vert_beam', vertBeamGeom);
+    }
     const vertBeam = new THREE.Mesh(vertBeamGeom);
     vertBeam.position.set(0, 1.88, 0);
     group.add(vertBeam);
 
     // Horizontal cross beam
-    const horizBeamGeom = new THREE.BoxGeometry(0.18, 0.065, 0.045);
+    let horizBeamGeom = geometryCache.get('king_horiz_beam');
+    if (!horizBeamGeom) {
+      horizBeamGeom = new THREE.BoxGeometry(0.18, 0.065, 0.045);
+      horizBeamGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('king_horiz_beam', horizBeamGeom);
+    }
     const horizBeam = new THREE.Mesh(horizBeamGeom);
     horizBeam.position.set(0, 1.90, 0);
     group.add(horizBeam);
 
     // Cross Pattée flared end-caps
-    const topCapGeom = new THREE.BoxGeometry(0.09, 0.028, 0.052);
+    let topCapGeom = geometryCache.get('king_top_cap');
+    if (!topCapGeom) {
+      topCapGeom = new THREE.BoxGeometry(0.09, 0.028, 0.052);
+      topCapGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('king_top_cap', topCapGeom);
+    }
     const topCap = new THREE.Mesh(topCapGeom);
     topCap.position.set(0, 1.995, 0);
     group.add(topCap);
 
-    const sideCapGeom = new THREE.BoxGeometry(0.028, 0.09, 0.052);
+    let sideCapGeom = geometryCache.get('king_side_cap');
+    if (!sideCapGeom) {
+      sideCapGeom = new THREE.BoxGeometry(0.028, 0.09, 0.052);
+      sideCapGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('king_side_cap', sideCapGeom);
+    }
     const leftCap = new THREE.Mesh(sideCapGeom);
     leftCap.position.set(-0.09, 1.90, 0);
     group.add(leftCap);
@@ -828,19 +966,29 @@
    * Internal slot material helper for Bishop diagonal slit
    */
   function getSlotMaterial(baseMaterial, theme, color) {
+    const c = normalizeColor(color);
+    const th = normalizeTheme(theme);
+    const key = `${th}_${c}`;
+    if (slotMaterialCache.has(key)) return slotMaterialCache.get(key);
+
     const THREE = getTHREE();
-    if (theme === 'neon') {
-      return new THREE.MeshStandardMaterial({
+    let mat;
+    if (th === 'neon') {
+      mat = new THREE.MeshStandardMaterial({
         color: 0x111116,
         roughness: 0.8,
         metalness: 0.1
       });
+    } else {
+      mat = new THREE.MeshStandardMaterial({
+        color: c === 'w' ? 0x9e9788 : 0x111114,
+        roughness: 0.8,
+        metalness: 0.05
+      });
     }
-    return new THREE.MeshStandardMaterial({
-      color: color === 'w' ? 0x9e9788 : 0x111114,
-      roughness: 0.8,
-      metalness: 0.05
-    });
+    mat.userData = { isSharedMaterial: true };
+    slotMaterialCache.set(key, mat);
+    return mat;
   }
 
   // =========================================================================
@@ -1255,7 +1403,12 @@
 
     // Transparent plane with authentic Lichess / Chess.com vector silhouette
     const texture = get2DPieceTexture(t, c, th);
-    const planeGeom = new THREE.PlaneGeometry(0.88, 0.88);
+    let planeGeom = geometryCache.get('plane_2d');
+    if (!planeGeom) {
+      planeGeom = new THREE.PlaneGeometry(0.88, 0.88);
+      planeGeom.userData = { isSharedGeometry: true };
+      geometryCache.set('plane_2d', planeGeom);
+    }
     const planeMat = new THREE.MeshBasicMaterial({
       map: texture || null,
       transparent: true,
@@ -1441,18 +1594,28 @@
   }
 
   /**
-   * Clear cached materials and textures
+   * Clear cached materials, textures, and shared geometries
    */
   function clearCache() {
+    geometryCache.forEach((geom) => {
+      if (geom && geom.dispose) geom.dispose();
+    });
+    geometryCache.clear();
+
     materialCache.forEach((mat) => {
-      if (mat.dispose) mat.dispose();
+      if (mat && mat.dispose) mat.dispose();
     });
     materialCache.clear();
 
     outlineMaterialCache.forEach((mat) => {
-      if (mat.dispose) mat.dispose();
+      if (mat && mat.dispose) mat.dispose();
     });
     outlineMaterialCache.clear();
+
+    slotMaterialCache.forEach((mat) => {
+      if (mat && mat.dispose) mat.dispose();
+    });
+    slotMaterialCache.clear();
 
     if (feltMaterialCache && feltMaterialCache.dispose) {
       feltMaterialCache.dispose();
@@ -1460,12 +1623,12 @@
     }
 
     textureCache.forEach((tex) => {
-      if (tex.dispose) tex.dispose();
+      if (tex && tex.dispose) tex.dispose();
     });
     textureCache.clear();
 
     texture2DCache.forEach((tex) => {
-      if (tex.dispose) tex.dispose();
+      if (tex && tex.dispose) tex.dispose();
     });
     texture2DCache.clear();
   }
@@ -1483,6 +1646,7 @@
     getOutlineMaterial,
     updatePieceTheme,
     clearCache,
+    geometryCache,
     PIECE_HEIGHTS,
     THEMES,
     MODES

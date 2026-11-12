@@ -249,11 +249,12 @@
   };
 
   function formatTime(totalSeconds) {
-    if (totalSeconds === null || totalSeconds === Infinity || totalSeconds <= 0 && isNaN(totalSeconds)) {
+    if (totalSeconds === null || totalSeconds === Infinity || (totalSeconds <= 0 && isNaN(totalSeconds))) {
       return '∞';
     }
-    const mins = Math.floor(Math.max(0, totalSeconds) / 60);
-    const secs = Math.floor(Math.max(0, totalSeconds) % 60);
+    const secsCeil = Math.ceil(Math.max(0, totalSeconds));
+    const mins = Math.floor(secsCeil / 60);
+    const secs = secsCeil % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
@@ -286,6 +287,7 @@
       this.timeControl = 0; // 0 = unlimited, or seconds (e.g. 300, 600, 900)
       this.clocks = { w: 0, b: 0 };
       this.clockInterval = null;
+      this.lastTickTime = null;
       this.gameStartTime = null;
       this.isGameOver = false;
 
@@ -683,6 +685,8 @@
       if (!this.gameStartTime) {
         this.gameStartTime = Date.now();
         this._startClockInterval();
+      } else if (this.lastTickTime !== null) {
+        this.lastTickTime = performance.now();
       }
 
       // Trigger audio FX based on move flags
@@ -858,6 +862,7 @@
     _resetClocks() {
       clearInterval(this.clockInterval);
       this.clockInterval = null;
+      this.lastTickTime = null;
       if (this.timeControl > 0) {
         this.clocks.w = this.timeControl;
         this.clocks.b = this.timeControl;
@@ -867,9 +872,14 @@
       }
     }
 
+    startClock() {
+      this._startClockInterval();
+    }
+
     _startClockInterval() {
       if (this.timeControl <= 0) return;
       clearInterval(this.clockInterval);
+      this.lastTickTime = performance.now();
 
       this.clockInterval = setInterval(() => {
         if (this.isGameOver) {
@@ -877,16 +887,21 @@
           return;
         }
 
+        const now = performance.now();
+        const elapsedSeconds = (now - this.lastTickTime) / 1000;
+        this.lastTickTime = now;
+
         const turn = this.engine.getTurn();
         if (this.clocks[turn] !== null && this.clocks[turn] > 0) {
-          this.clocks[turn]--;
+          this.clocks[turn] = Math.max(0, this.clocks[turn] - elapsedSeconds);
           this._updateClockDisplays();
 
           if (this.clocks[turn] <= 0) {
+            this.clocks[turn] = 0;
             this._handleTimeout(turn);
           }
         }
-      }, 1000);
+      }, 100);
     }
 
     _handleTimeout(timedOutColor) {
@@ -1229,9 +1244,17 @@
   // ==========================================================================
   // 11. Bootstrapping
   // ==========================================================================
-  window.addEventListener('DOMContentLoaded', () => {
-    window.chessApp = new ChessApp();
-    window.chessApp.init();
-  });
+  function initApp() {
+    if (!window.chessApp) {
+      window.chessApp = new ChessApp();
+      window.chessApp.init();
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
+  }
 
 })();

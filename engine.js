@@ -336,11 +336,27 @@
     /**
      * Checks if the specified color (or current turn if omitted) is currently in check.
      */
-    isCheck(color = this.turn) {
-      const kingCoords = this._findKing(color);
-      if (!kingCoords) return false;
+    isInCheck(color = this.turn, board = this.board) {
+      let kingRow = -1;
+      let kingCol = -1;
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = board[r][c];
+          if (p && p.type === 'k' && p.color === color) {
+            kingRow = r;
+            kingCol = c;
+            break;
+          }
+        }
+        if (kingRow !== -1) break;
+      }
+      if (kingRow === -1) return false;
       const opponentColor = color === 'w' ? 'b' : 'w';
-      return this.isSquareAttacked(kingCoords, opponentColor);
+      return this.isSquareAttacked({ row: kingRow, col: kingCol }, opponentColor, board);
+    }
+
+    isCheck(color = this.turn, board = this.board) {
+      return this.isInCheck(color, board);
     }
 
     /**
@@ -532,34 +548,57 @@
     }
 
     _isLegalMove(move) {
-      const tempBoard = cloneBoard(this.board);
       const { fromRow, fromCol, toRow, toCol, piece, color, flagsStr, promotion } = move;
+      const movedPiece = this.board[fromRow][fromCol];
+      const capturedPiece = this.board[toRow][toCol];
 
-      tempBoard[toRow][toCol] = {
-        type: promotion ? promotion.toLowerCase() : piece,
-        color,
-        square: coordsToSquare(toRow, toCol)
-      };
-      tempBoard[fromRow][fromCol] = null;
-
-      // En passant: remove captured pawn
-      if (flagsStr && flagsStr.includes('e')) {
-        tempBoard[fromRow][toCol] = null;
+      let epCaptured = null;
+      const isEP = Boolean(flagsStr && flagsStr.includes('e'));
+      if (isEP) {
+        epCaptured = this.board[fromRow][toCol];
+        this.board[fromRow][toCol] = null;
       }
 
-      // Castling: move rook
-      if (flagsStr && flagsStr.includes('k')) {
-        tempBoard[toRow][5] = tempBoard[toRow][7];
-        tempBoard[toRow][7] = null;
-      } else if (flagsStr && flagsStr.includes('q')) {
-        tempBoard[toRow][3] = tempBoard[toRow][0];
-        tempBoard[toRow][0] = null;
+      const isKCastle = Boolean(flagsStr && flagsStr.includes('k'));
+      const isQCastle = Boolean(flagsStr && flagsStr.includes('q'));
+      if (isKCastle) {
+        this.board[toRow][5] = this.board[toRow][7];
+        this.board[toRow][7] = null;
+      } else if (isQCastle) {
+        this.board[toRow][3] = this.board[toRow][0];
+        this.board[toRow][0] = null;
       }
 
-      const kingCoords = this._findKing(color, tempBoard);
-      if (!kingCoords) return false;
-      const opponentColor = color === 'w' ? 'b' : 'w';
-      return !this.isSquareAttacked(kingCoords, opponentColor, tempBoard);
+      if (promotion) {
+        this.board[toRow][toCol] = {
+          type: promotion.toLowerCase(),
+          color,
+          square: coordsToSquare(toRow, toCol)
+        };
+      } else {
+        this.board[toRow][toCol] = movedPiece;
+      }
+      this.board[fromRow][fromCol] = null;
+
+      const inCheck = this.isInCheck(color, this.board);
+
+      // Restore board to exact original state
+      this.board[fromRow][fromCol] = movedPiece;
+      this.board[toRow][toCol] = capturedPiece;
+
+      if (isEP) {
+        this.board[fromRow][toCol] = epCaptured;
+      }
+
+      if (isKCastle) {
+        this.board[toRow][7] = this.board[toRow][5];
+        this.board[toRow][5] = null;
+      } else if (isQCastle) {
+        this.board[toRow][0] = this.board[toRow][3];
+        this.board[toRow][3] = null;
+      }
+
+      return !inCheck;
     }
 
     /**
@@ -1131,6 +1170,7 @@
   ChessEngine.makeMove = (move, to, promo) => defaultGame.makeMove(move, to, promo);
   ChessEngine.undo = () => defaultGame.undo();
   ChessEngine.isCheck = (color) => defaultGame.isCheck(color);
+  ChessEngine.isInCheck = (color, board) => defaultGame.isInCheck(color, board);
   ChessEngine.isCheckmate = () => defaultGame.isCheckmate();
   ChessEngine.isStalemate = () => defaultGame.isStalemate();
   ChessEngine.isDraw = () => defaultGame.isDraw();

@@ -8,12 +8,14 @@ Verifies:
 5. Export signatures & UMD compatibility
 """
 
+import os
 import re
 import math
 import sys
 
 def verify_pieces3d():
-    with open("pieces3d.js", "r", encoding="utf-8") as f:
+    file_path = os.path.join(os.path.dirname(__file__), "..", "pieces3d.js") if not os.path.exists("pieces3d.js") else "pieces3d.js"
+    with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     print("[1] Checking exports and signatures...")
@@ -79,6 +81,21 @@ def verify_pieces3d():
     assert "transparent: true" in content, "Missing transparent material for 2D pieces"
 
     print("    Validated clean 3D physical accent trims and Lichess-style 2D vector silhouettes.")
+
+    print("[7] Checking Procedural Geometry Reuse & Radial Segments Optimization (Point 3)...")
+    assert "geometryCache = new Map()" in content, "Missing geometryCache declaration"
+    assert "isSharedGeometry: true" in content, "Missing isSharedGeometry flag on cached geometries"
+    assert "isSharedMaterial: true" in content, "Missing isSharedMaterial flag on cached materials"
+    assert "geometryCache.get('pawn_stem')" in content, "Missing geometryCache reuse for pawn stem"
+    assert "geometryCache.get('rook_tower')" in content, "Missing geometryCache reuse for rook tower"
+    assert "geometryCache.get('knight_head_extrude')" in content, "Missing geometryCache reuse for knight extrude"
+    assert "geometryCache.get('bishop_mitre')" in content, "Missing geometryCache reuse for bishop mitre"
+    assert "geometryCache.get('queen_body')" in content, "Missing geometryCache reuse for queen body"
+    assert "geometryCache.get('king_body')" in content, "Missing geometryCache reuse for king body"
+    assert "geometryCache.get('plane_2d')" in content, "Missing geometryCache reuse for 2D plane"
+    assert "LatheGeometry(pts, 24)" in content, "LatheGeometry should use 24 radial segments for 40% vertex reduction"
+    assert "geometryCache.clear()" in content, "clearCache should clear geometryCache"
+    print("    Validated geometryCache reuse across all pieces, 24 radial segments, and shared flags.")
 
     print("\n>>> ALL PIECES3D CHECKS PASSED SUCCESSFULLY! <<<")
 

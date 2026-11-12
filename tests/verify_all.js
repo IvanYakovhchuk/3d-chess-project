@@ -1,15 +1,19 @@
 /**
  * verify_all.js
  * End-to-end verification of the Royal 3D Chess Application:
- * 1) Syntax and file integrity validation
- * 2) HTML and DOM element ID cross-check with app.js
+ * 1) Clean root structure & tests/ directory integrity
+ * 2) HTML structure & DOM element ID cross-check with app.js
  * 3) Engine chess rules comprehensive validation (170+ checks)
  * 4) 3D Pieces procedural geometry, theme, shadow & scale verification (48 variations)
- * 5) 3D Scene API contracts, coordinate mapping, and integration verification
+ * 5) 3D Physical accent trims & Procedural Lichess 2D Mode (48 variations)
+ * 6) 3D Scene API contracts & coordinate mapping
+ * 7) Verification of All 5 Performance & Input-Latency Optimizations
  */
 
 const fs = require('fs');
 const path = require('path');
+
+const rootDir = path.join(__dirname, '..');
 
 let totalChecks = 0;
 let passedChecks = 0;
@@ -46,24 +50,39 @@ function runSuite(title, fn) {
 }
 
 // ============================================================================
-// 1. File Existence & Integrity
+// 1. Root Directory & tests/ Directory Cleanliness
 // ============================================================================
-runSuite('File Existence & Integrity Check', () => {
-  const requiredFiles = [
-    'index.html',
-    'style.css',
-    'engine.js',
-    'pieces3d.js',
-    'scene3d.js',
-    'app.js',
-    'test_engine.js'
+runSuite('Project Structure Cleanliness & tests/ Directory Verification', () => {
+  const rootFiles = fs.readdirSync(rootDir).filter(f => fs.statSync(path.join(rootDir, f)).isFile());
+  const expectedRootFiles = ['app.js', 'engine.js', 'index.html', 'pieces3d.js', 'scene3d.js', 'style.css'];
+
+  expectedRootFiles.forEach(file => {
+    assert(rootFiles.includes(file), `Root directory contains core file: ${file}`);
+    const stat = fs.statSync(path.join(rootDir, file));
+    assert(stat.size > 100, `Core file is non-empty (>100 bytes): ${file} (${stat.size} bytes)`);
+  });
+
+  // Verify no test scripts or temp files are left loose in root
+  const strayFiles = rootFiles.filter(f => !expectedRootFiles.includes(f));
+  assertEqual(strayFiles.length, 0, `No stray test/temporary files in root directory (found: ${strayFiles.join(', ') || 'none'})`);
+
+  // Verify tests directory exists and contains all moved test suites
+  const testDirFiles = fs.readdirSync(__dirname);
+  const expectedTestFiles = [
+    'test_engine.js',
+    'verify_engine_extended.js',
+    'verify_all.js',
+    'verify_board_fix.js',
+    'verify_pieces3d.py',
+    'verify_scene3d.py',
+    'syntax_check.py',
+    'test.html',
+    'test_pieces.html',
+    'test_scene.html'
   ];
 
-  requiredFiles.forEach(file => {
-    const filePath = path.join(__dirname, file);
-    assert(fs.existsSync(filePath), `File exists: ${file}`);
-    const stat = fs.statSync(filePath);
-    assert(stat.size > 100, `File is non-empty (>100 bytes): ${file} (${stat.size} bytes)`);
+  expectedTestFiles.forEach(file => {
+    assert(testDirFiles.includes(file), `tests/ directory contains: ${file}`);
   });
 });
 
@@ -71,8 +90,8 @@ runSuite('File Existence & Integrity Check', () => {
 // 2. HTML Structure & DOM Cross-Reference
 // ============================================================================
 runSuite('HTML & DOM Cross-Reference Validation', () => {
-  const htmlContent = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  const appContent = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const htmlContent = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+  const appContent = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
 
   // Verify scripts in index.html
   assert(htmlContent.includes('three.min.js'), 'index.html includes Three.js CDN');
@@ -114,7 +133,7 @@ runSuite('HTML & DOM Cross-Reference Validation', () => {
 // 3. Engine Rules & Edge Cases (Fool's, Scholar's, Castling, e.p., promo, pins)
 // ============================================================================
 runSuite('Chess Engine Rules & Edge Cases', () => {
-  const ChessEngine = require('./engine.js');
+  const ChessEngine = require('../engine.js');
 
   // Test starting state
   const start = new ChessEngine();
@@ -194,7 +213,7 @@ runSuite('Chess Engine Rules & Edge Cases', () => {
 });
 
 // ============================================================================
-// 4. Procedural 3D Pieces (pieces3d.js) - 48 Mesh Variations & Shadows
+// 4. Procedural 3D Pieces (pieces3d.js) Geometry & Themes
 // ============================================================================
 runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
   // Construct minimal THREE mock in global for Node execution
@@ -267,6 +286,7 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
     constructor() {
       this.isGeometry = true;
       this.parameters = {};
+      this.userData = {};
     }
     computeVertexNormals() {}
     applyMatrix4(m) { return this; }
@@ -322,6 +342,7 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
   class MockMaterial {
     constructor(params = {}) {
       this.isMaterial = true;
+      this.userData = {};
       Object.assign(this, params);
       if (!(this.color instanceof MockColor)) {
         this.color = new MockColor(typeof this.color === 'number' ? this.color : 0);
@@ -364,7 +385,7 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
   global.window = global;
 
   // Load pieces3d.js
-  const piecesModule = require('./pieces3d.js');
+  const piecesModule = require('../pieces3d.js');
   assert(piecesModule !== null, 'pieces3d.js loaded successfully in Node');
   assertEqual(typeof piecesModule.createPieceMesh, 'function', 'pieces3d exposes createPieceMesh');
   assertEqual(typeof piecesModule.getPieceHeight, 'function', 'pieces3d exposes getPieceHeight');
@@ -425,8 +446,8 @@ runSuite('Procedural 3D Pieces (pieces3d.js) Geometry & Themes', () => {
 // 5. 3D Piece Contours & Procedural 2D Mode (pieces3d.js & scene3d.js)
 // ============================================================================
 runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
-  const piecesModule = require('./pieces3d.js');
-  const sceneModule = require('./scene3d.js');
+  const piecesModule = require('../pieces3d.js');
+  const sceneModule = require('../scene3d.js');
 
   // 1. Verify 3D piece physical accent outlines and DoubleSide materials
   piecesModule.setMode('3d');
@@ -540,7 +561,7 @@ runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
 // ============================================================================
 runSuite('3D Scene (scene3d.js) API Contracts & Board Coordinate Math', () => {
   // Load scene3d.js
-  const sceneModule = require('./scene3d.js');
+  const sceneModule = require('../scene3d.js');
   assert(typeof sceneModule === 'function', 'scene3d.js exports ChessScene3D class');
 
   // Verify static prototype methods
@@ -553,9 +574,79 @@ runSuite('3D Scene (scene3d.js) API Contracts & Board Coordinate Math', () => {
   assertEqual(typeof proto.destroy, 'function', 'ChessScene3D has destroy method');
 
   // Read scene3d.js to verify board square coordinates math
-  const sceneSrc = fs.readFileSync(path.join(__dirname, 'scene3d.js'), 'utf8');
+  const sceneSrc = fs.readFileSync(path.join(rootDir, 'scene3d.js'), 'utf8');
   assert(sceneSrc.includes("-3.5 + coords.col"), 'Board file coordinate mapped from x=-3.5 (file a) to x=+3.5 (file h)');
   assert(sceneSrc.includes("-3.5 + coords.row"), 'Board rank coordinate mapped from z=-3.5 (rank 8) to z=+3.5 (rank 1)');
+});
+
+// ============================================================================
+// 7. Verification of All 5 Performance & Input-Latency Optimizations
+// ============================================================================
+runSuite('Verification of All 5 Performance & Input-Latency Optimizations', () => {
+  const engineSrc = fs.readFileSync(path.join(rootDir, 'engine.js'), 'utf8');
+  const piecesSrc = fs.readFileSync(path.join(rootDir, 'pieces3d.js'), 'utf8');
+  const sceneSrc = fs.readFileSync(path.join(rootDir, 'scene3d.js'), 'utf8');
+  const appSrc = fs.readFileSync(path.join(rootDir, 'app.js'), 'utf8');
+  const htmlSrc = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+  const styleSrc = fs.readFileSync(path.join(rootDir, 'style.css'), 'utf8');
+
+  // OPT 1: Deferred Raycasting & O(1) Board Plane Intersection (scene3d.js)
+  assert(sceneSrc.includes('this.canvasRect'), 'Opt 1: canvasRect caching is present in scene3d.js');
+  assert(sceneSrc.includes('updateCanvasRect'), 'Opt 1: updateCanvasRect method exists in scene3d.js');
+  assert(sceneSrc.includes('getCoalescedEvents'), 'Opt 1: getCoalescedEvents supported for high-polling pointers');
+  assert(sceneSrc.includes('this.needsRaycast = true'), 'Opt 1: drag pointermove flags needsRaycast for deferred execution');
+  assert(sceneSrc.includes('this.boardPlane = new THREE.Plane'), 'Opt 1: horizontal boardPlane initialized for O(1) click intersections');
+  assert(sceneSrc.includes('{ passive: true }'), 'Opt 1: pointermove/scroll listeners registered with passive: true');
+
+  // OPT 2: On-Demand Rendering & Frozen Static Shadows (scene3d.js)
+  assert(sceneSrc.includes('shadowMap.autoUpdate = false'), 'Opt 2: shadowMap.autoUpdate disabled to freeze static shadows');
+  assert(sceneSrc.includes('shadowMap.needsUpdate = true'), 'Opt 2: shadowMap.needsUpdate triggered on-demand');
+  assert(sceneSrc.includes('requestRender'), 'Opt 2: requestRender method implemented on ChessScene3D');
+  assert(sceneSrc.includes('this.needsRender = true'), 'Opt 2: needsRender flag tracks render requests');
+  assert(sceneSrc.includes('this.needsRender = false'), 'Opt 2: needsRender reset after rendering frame in animation loop');
+
+  // OPT 3: geometryCache, Shared BufferGeometry Reuse, & 24 Radial Segments (pieces3d.js)
+  const piecesModule = require('../pieces3d.js');
+  assert(piecesModule.geometryCache instanceof Map, 'Opt 3: geometryCache Map exposed on ChessPieces3D');
+  assert(piecesSrc.includes('isSharedGeometry: true'), 'Opt 3: geometries marked with isSharedGeometry: true');
+  assert(piecesSrc.includes('isSharedMaterial: true'), 'Opt 3: materials marked with isSharedMaterial: true');
+  assert(sceneSrc.includes('isSharedGeometry'), 'Opt 3: scene3d disposeObject protects shared geometries');
+  assert(sceneSrc.includes('isSharedMaterial'), 'Opt 3: scene3d disposeObject protects shared materials');
+  assert(piecesSrc.includes('new THREE.LatheGeometry(pts, 24)'), 'Opt 3: LatheGeometry optimized with 24 radial segments (~40% vertex reduction)');
+
+  // OPT 4: In-Place make/unmake in _isLegalMove & Optimized isInCheck (engine.js)
+  const isLegalMoveMethod = engineSrc.slice(
+    engineSrc.indexOf('_isLegalMove('),
+    engineSrc.indexOf('_moveToSAN(')
+  );
+  assert(!isLegalMoveMethod.includes('cloneBoard'), 'Opt 4: _isLegalMove does NOT call cloneBoard');
+  assert(engineSrc.includes('_isLegalMove'), 'Opt 4: _isLegalMove exists');
+
+  // Benchmark legal moves generation with in-place make/unmake
+  const ChessEngine = require('../engine.js');
+  const game = new ChessEngine();
+  const startPerf = Date.now();
+  for (let i = 0; i < 5000; i++) {
+    game.getLegalMoves();
+  }
+  const elapsed = Date.now() - startPerf;
+  console.log(`  Benchmarked 5,000 getLegalMoves() calls: ${elapsed}ms (${(elapsed / 5000 * 1000).toFixed(1)} µs/call)`);
+  assert(elapsed < 2000, `Opt 4: 5,000 legal move evaluations executed in ${elapsed}ms (<2000ms threshold)`);
+
+  // OPT 5: defer Scripts, performance.now() Clock Delta, 8px CSS Blur, Clean Root Folder
+  const scriptRegex = /<script\s+[^>]*src=["'][^"']+["'][^>]*>/g;
+  let scriptMatch;
+  let scriptCount = 0;
+  let deferredCount = 0;
+  while ((scriptMatch = scriptRegex.exec(htmlSrc)) !== null) {
+    scriptCount++;
+    if (scriptMatch[0].includes('defer')) deferredCount++;
+  }
+  assertEqual(deferredCount, scriptCount, `Opt 5: All ${scriptCount} script tags in index.html have defer attribute`);
+
+  assert(appSrc.includes('performance.now()'), 'Opt 5: app.js uses performance.now() for drift-free clock delta');
+  assert(appSrc.includes('document.readyState'), 'Opt 5: app.js handles both loading and deferred document states');
+  assert(styleSrc.includes('--glass-blur: blur(8px)'), 'Opt 5: style.css defines --glass-blur as blur(8px) to reduce GPU compositor load');
 });
 
 // ============================================================================

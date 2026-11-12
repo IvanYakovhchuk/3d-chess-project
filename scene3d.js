@@ -749,6 +749,12 @@
       this.highlightMeshes = [];
       this.checkPulseMesh = null;
 
+      // Performance & Input-latency optimization state
+      this.canvasRect = null;
+      this.needsRaycast = false;
+      this.boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      this.needsRender = true;
+
       // Scene & Renderer initialization
       this.initScene();
       this.initLights();
@@ -780,6 +786,9 @@
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.shadowMap.autoUpdate = false;
+      this.renderer.shadowMap.needsUpdate = true;
+      this.needsRender = true;
       if (THREE.ACESFilmicToneMapping) {
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = 1.05;
@@ -797,6 +806,27 @@
       // Clear container and append canvas
       this.containerEl.innerHTML = '';
       this.containerEl.appendChild(this.renderer.domElement);
+      this.updateCanvasRect();
+    }
+
+    /**
+     * Caches the bounding client rect of the canvas to avoid layout reflows on pointer events
+     */
+    updateCanvasRect() {
+      if (this.renderer && this.renderer.domElement) {
+        this.canvasRect = this.renderer.domElement.getBoundingClientRect();
+      }
+    }
+
+    /**
+     * Requests a frame render on-demand. Optionally triggers shadow map recomputation.
+     * @param {boolean} [updateShadows=false]
+     */
+    requestRender(updateShadows = false) {
+      this.needsRender = true;
+      if (updateShadows && this.renderer && this.renderer.shadowMap) {
+        this.renderer.shadowMap.needsUpdate = true;
+      }
     }
 
     /**
@@ -1122,6 +1152,8 @@
       if (checkSquare) {
         this.createCheckMarker(checkSquare);
       }
+
+      this.requestRender(false);
     }
 
     /**
@@ -1142,6 +1174,7 @@
       }
       this.highlightMeshes = [];
       this.checkPulseMesh = null;
+      this.requestRender(false);
     }
 
     createSquareHighlight(square, hexColor, opacity = 0.4, type = 'fill') {
@@ -1438,6 +1471,8 @@
           });
         }
       }
+
+      this.requestRender(true);
     }
 
     /**
@@ -1553,6 +1588,7 @@
         }
       };
       this.activeAnimations.push(popAnim);
+      this.requestRender(true);
     }
 
     /**
@@ -1655,6 +1691,7 @@
           entry.mesh = newMesh;
         }
       }
+      this.requestRender(true);
     }
 
     /**
@@ -1686,6 +1723,7 @@
         this.targetSpherical.theta = this.isFlipped ? Math.PI : 0.0;
         this.targetSpherical.radius = 12.0;
       }
+      this.requestRender(true);
     }
 
     getViewMode() {
@@ -1721,6 +1759,7 @@
         this.piecesGroup.add(newMesh);
         entry.mesh = newMesh;
       }
+      this.requestRender(true);
     }
 
     updatePieceOrientations2D() {
@@ -1757,6 +1796,7 @@
       if (this.viewMode === '2d') {
         this.updatePieceOrientations2D();
       }
+      this.requestRender(false);
     }
 
     /**
@@ -1771,6 +1811,7 @@
       if (this.viewMode === '2d') {
         this.updatePieceOrientations2D();
       }
+      this.requestRender(false);
     }
 
     /**
@@ -1831,13 +1872,17 @@
       this.onWheel = this.handleWheel.bind(this);
       this.onContextMenu = (e) => e.preventDefault();
       this.onWindowResize = this.onResize.bind(this);
+      this.onScroll = () => this.updateCanvasRect();
 
       dom.addEventListener('pointerdown', this.onPointerDown);
-      window.addEventListener('pointermove', this.onPointerMove);
-      window.addEventListener('pointerup', this.onPointerUp);
+      window.addEventListener('pointermove', this.onPointerMove, { passive: true });
+      window.addEventListener('pointerup', this.onPointerUp, { passive: true });
       dom.addEventListener('wheel', this.onWheel, { passive: false });
       dom.addEventListener('contextmenu', this.onContextMenu);
       window.addEventListener('resize', this.onWindowResize);
+      window.addEventListener('scroll', this.onScroll, { passive: true });
+
+      this.updateCanvasRect();
 
       // Support container resize observer
       if (typeof ResizeObserver !== 'undefined') {
@@ -1847,9 +1892,12 @@
     }
 
     updatePointerCoords(event) {
-      const rect = this.renderer.domElement.getBoundingClientRect();
-      this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      const targetEvent = (typeof event.getCoalescedEvents === 'function')
+        ? (event.getCoalescedEvents().slice(-1)[0] || event)
+        : event;
+      const rect = this.canvasRect || this.renderer.domElement.getBoundingClientRect();
+      this.pointer.x = ((targetEvent.clientX - rect.left) / rect.width) * 2 - 1;
+      this.pointer.y = -((targetEvent.clientY - rect.top) / rect.height) * 2 + 1;
     }
 
     handlePointerDown(event) {
@@ -1893,11 +1941,15 @@
         }
       }
 
-      // Check board square raycast
-      const boardIntersects = this.raycaster.intersectObjects(this.squareMeshes);
-      if (boardIntersects.length > 0) {
-        const sq = boardIntersects[0].object.userData.square;
-        this.boardClickCandidate = { square: sq };
+      // Check board plane raycast (O(1) horizontal plane intersection)
+      const hitPoint = new THREE.Vector3();
+      if (this.raycaster.ray.intersectPlane(this.boardPlane, hitPoint)) {
+        if (hitPoint.x >= -4.0 && hitPoint.x <= 4.0 && hitPoint.z >= -4.0 && hitPoint.z <= 4.0) {
+          const sq = worldToSquare(hitPoint.x, hitPoint.z);
+          if (sq) {
+            this.boardClickCandidate = { square: sq };
+          }
+        }
       }
     }
 
@@ -1916,22 +1968,13 @@
         const liftY = this.viewMode === '2d' ? 0.06 : 0.55;
         this.draggedPiece.mesh.position.y = liftY; // Lift piece
         this.interactionPlane.constant = -liftY;
+        this.requestRender(true);
       }
 
       if (this.draggedPiece) {
-        // Raycast against horizontal interaction plane
-        this.raycaster.setFromCamera(this.pointer, this.camera);
-        const intersectPoint = new THREE.Vector3();
-        if (this.raycaster.ray.intersectPlane(this.interactionPlane, intersectPoint)) {
-          this.draggedPiece.mesh.position.x = intersectPoint.x;
-          this.draggedPiece.mesh.position.z = intersectPoint.z;
-
-          // Track hovered square
-          const hovered = worldToSquare(intersectPoint.x, intersectPoint.z);
-          if (hovered !== this.hoveredSquare) {
-            this.hoveredSquare = hovered;
-          }
-        }
+        // Defer raycasting to requestAnimationFrame tick
+        this.needsRaycast = true;
+        this.requestRender(true);
         return;
       }
 
@@ -1950,6 +1993,7 @@
             const panSpeed = 0.012 * (this.cameraSpherical.radius / 11.0);
             this.cameraTarget.x -= moveX * panSpeed;
             this.cameraTarget.z -= moveY * panSpeed * (this.isFlipped ? -1 : 1);
+            this.requestRender(false);
           }
         } else if (this.pointerButton === 2 || event.shiftKey) {
           // Pan camera target
@@ -1962,6 +2006,7 @@
 
           this.cameraTarget.addScaledVector(right, -moveX * panSpeed);
           this.cameraTarget.addScaledVector(up, moveY * panSpeed);
+          this.requestRender(false);
         } else {
           // Orbit camera angles
           const orbitSpeed = 0.007;
@@ -1973,6 +2018,7 @@
             this.minPhi,
             Math.min(this.maxPhi, this.targetSpherical.phi)
           );
+          this.requestRender(false);
         }
 
         this.pointerLastX = event.clientX;
@@ -1999,6 +2045,7 @@
         // Reset piece position back to original before triggering callbacks
         this.draggedPiece.mesh.position.copy(this.draggedPiece.originalPos);
         this.draggedPiece.mesh.position.y = this.viewMode === '2d' ? 0.02 : 0;
+        this.requestRender(true);
 
         if (targetSquare && targetSquare !== fromSquare) {
           // Drop triggered
@@ -2009,6 +2056,7 @@
 
         this.draggedPiece = null;
         this.dragCandidate = null;
+        this.needsRaycast = false;
         this.isPointerDown = false;
         return;
       }
@@ -2044,6 +2092,7 @@
         this.minRadius,
         Math.min(this.maxRadius, this.targetSpherical.radius)
       );
+      this.requestRender(false);
     }
 
     /**
@@ -2058,10 +2107,12 @@
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(width, height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      this.updateCanvasRect();
+      this.requestRender(false);
     }
 
     /**
-     * Animation render loop
+     * Animation render loop with on-demand rendering and deferred raycasting
      */
     startAnimationLoop() {
       let isRunning = true;
@@ -2071,7 +2122,24 @@
         if (!isRunning) return;
         requestAnimationFrame(animate);
 
-        // Update active piece animations
+        // 1. Deferred Raycast on requestAnimationFrame tick when dragging piece
+        if (this.needsRaycast && this.draggedPiece) {
+          this.raycaster.setFromCamera(this.pointer, this.camera);
+          const intersectPoint = new THREE.Vector3();
+          if (this.raycaster.ray.intersectPlane(this.interactionPlane, intersectPoint)) {
+            this.draggedPiece.mesh.position.x = intersectPoint.x;
+            this.draggedPiece.mesh.position.z = intersectPoint.z;
+
+            // Track hovered square
+            const hovered = worldToSquare(intersectPoint.x, intersectPoint.z);
+            if (hovered !== this.hoveredSquare) {
+              this.hoveredSquare = hovered;
+            }
+          }
+          this.needsRaycast = false;
+        }
+
+        // 2. Update active piece animations
         if (this.activeAnimations.length > 0) {
           for (let i = this.activeAnimations.length - 1; i >= 0; i--) {
             const finished = this.activeAnimations[i].update(time);
@@ -2079,41 +2147,63 @@
               this.activeAnimations.splice(i, 1);
             }
           }
+          this.renderer.shadowMap.needsUpdate = true;
+          this.needsRender = true;
         }
 
-        // Pulsing check ring animation
+        // Dragging updates shadows and triggers render
+        if (this.draggedPiece) {
+          this.renderer.shadowMap.needsUpdate = true;
+          this.needsRender = true;
+        }
+
+        // 3. Pulsing check ring animation
         if (this.checkPulseMesh) {
           const pulse = 0.55 + 0.35 * Math.sin(time * 0.008);
           this.checkPulseMesh.material.opacity = pulse;
+          this.needsRender = true;
         }
 
-        // Camera damping
-        this.updateCameraPosition();
+        // 4. Camera damping & motion detection
+        let dTheta = this.targetSpherical.theta - this.cameraSpherical.theta;
+        while (dTheta > Math.PI) dTheta -= Math.PI * 2;
+        while (dTheta < -Math.PI) dTheta += Math.PI * 2;
+        const dPhi = this.targetSpherical.phi - this.cameraSpherical.phi;
+        const dRadius = this.targetSpherical.radius - this.cameraSpherical.radius;
+        const cameraMoving = Math.abs(dTheta) > 0.0001 || Math.abs(dPhi) > 0.0001 || Math.abs(dRadius) > 0.0005;
 
-        // Render scene
-        this.renderer.render(this.scene, this.camera);
+        if (cameraMoving) {
+          this.updateCameraPosition();
+          this.needsRender = true;
+        }
+
+        // 5. On-Demand Render
+        if (this.needsRender) {
+          this.renderer.render(this.scene, this.camera);
+          this.needsRender = false;
+        }
       };
 
       requestAnimationFrame(animate);
     }
 
     /**
-     * Helper to recursively dispose geometries and materials
+     * Helper to recursively dispose geometries and materials, protecting shared cached resources
      */
     disposeObject(obj) {
       if (!obj) return;
       obj.traverse((child) => {
-        if (child.geometry) child.geometry.dispose();
+        if (child.geometry && !child.geometry.userData?.isSharedGeometry) {
+          child.geometry.dispose();
+        }
         if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach(m => {
-              if (m.map) m.map.dispose();
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(m => {
+            if (!m.userData?.isSharedMaterial) {
+              if (m.map && !m.map.userData?.isSharedTexture) m.map.dispose();
               m.dispose();
-            });
-          } else {
-            if (child.material.map) child.material.map.dispose();
-            child.material.dispose();
-          }
+            }
+          });
         }
       });
     }
@@ -2135,6 +2225,7 @@
       dom.removeEventListener('wheel', this.onWheel);
       dom.removeEventListener('contextmenu', this.onContextMenu);
       window.removeEventListener('resize', this.onWindowResize);
+      window.removeEventListener('scroll', this.onScroll);
 
       this.disposeObject(this.scene);
       this.renderer.dispose();

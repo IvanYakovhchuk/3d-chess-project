@@ -2,6 +2,7 @@
 verify_scene3d.py - Comprehensive verification for scene3d.js
 """
 
+import os
 import re
 import sys
 
@@ -10,7 +11,8 @@ def verify_scene3d():
     print("  VERIFYING scene3d.js")
     print("==================================================")
 
-    with open("scene3d.js", "r", encoding="utf-8") as f:
+    file_path = os.path.join(os.path.dirname(__file__), "..", "scene3d.js") if not os.path.exists("scene3d.js") else "scene3d.js"
+    with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     # 1. Exports & Global Exposure
