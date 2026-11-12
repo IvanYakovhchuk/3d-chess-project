@@ -80,10 +80,10 @@ assert(
   'pieces3d.js generates procedural bumpMap with bumpScale relief'
 );
 
-// 1.5 DoubleSide maintained for knight extrusions
+// 1.5 Backface culling: FrontSide active (no DoubleSide on 3D piece materials)
 assert(
-  piecesSrc.includes('side: THREE.DoubleSide') || piecesSrc.includes('side:THREE.DoubleSide'),
-  'pieces3d.js preserves side: THREE.DoubleSide'
+  piecesSrc.includes('side: THREE.FrontSide') || !piecesSrc.includes('side: THREE.DoubleSide'),
+  'pieces3d.js activates GPU backface culling with THREE.FrontSide'
 );
 
 // 1.6 Cache protection flags

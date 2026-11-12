@@ -463,18 +463,19 @@ runSuite('3D Inverted-Hull Outlines & Procedural 2D Three.js Mode', () => {
       const mesh3d = piecesModule.createPieceMesh(t, c, 'classic', '3d');
       let hasAccentOutline = false;
       let hasDoubleSideMaterial = false;
+      let hasFrontSideMaterial = false;
       let hasBackSideClone = false;
 
       mesh3d.traverse(child => {
         if (child.isMesh) {
           if (child.userData.isOutline) hasAccentOutline = true;
-          if (child.material && child.material.side === 2) hasDoubleSideMaterial = true;
+          if (child.material && (child.material.side === 0 || child.material.side === undefined)) hasFrontSideMaterial = true;
           if (child.material && child.material.side === 1) hasBackSideClone = true;
         }
       });
 
       assert(hasAccentOutline, `3D Piece ${t}_${c} has physical accent outline/trim`);
-      assert(hasDoubleSideMaterial, `3D Piece ${t}_${c} has DoubleSide material for true color rendering`);
+      assert(hasFrontSideMaterial, `3D Piece ${t}_${c} has FrontSide material with GPU backface culling`);
       assert(!hasBackSideClone, `3D Piece ${t}_${c} does NOT have flickering BackSide clone mesh`);
       if (hasAccentOutline) outlinedCount++;
     }

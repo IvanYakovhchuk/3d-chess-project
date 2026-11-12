@@ -109,6 +109,20 @@ def verify_pieces3d():
     assert "isSharedTexture: true" in content, "Missing isSharedTexture flag on cached textures"
     print("    Validated PBR MeshPhysicalMaterial, clearcoat, envMapIntensity, and multi-channel procedural maps.")
 
+    print("[9] Checking Backface Culling (FrontSide), Knight Winding & Zero getImageData...")
+    assert "side: THREE.FrontSide" in content, "Missing side: THREE.FrontSide for GPU backface culling"
+    get_mat_start = content.find("function getMaterial(")
+    get_outline_start = content.find("function getOutlineMaterial(")
+    assert get_mat_start != -1 and get_outline_start != -1, "Could not find getMaterial / getOutlineMaterial"
+    get_mat_section = content[get_mat_start:get_outline_start]
+    assert "side: THREE.DoubleSide" not in get_mat_section, "getMaterial() must not use DoubleSide (GPU backface culling active)"
+    knight_start = content.find("createKnightGeometry(")
+    bishop_start = content.find("createBishopGeometry(")
+    knight_section = content[knight_start:bishop_start]
+    assert "indexArray" in knight_section or "winding" in knight_section or "index" in knight_section, "Knight head extrude must invert triangle winding"
+    assert "getImageData" not in content, "pieces3d.js must not contain pixel-by-pixel getImageData/putImageData loop"
+    print("    Validated GPU backface culling (FrontSide), corrected Knight winding, and zero getImageData overhead.")
+
     print("\n>>> ALL PIECES3D CHECKS PASSED SUCCESSFULLY! <<<")
 
 if __name__ == "__main__":

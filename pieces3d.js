@@ -254,16 +254,52 @@
           ctxB.stroke();
         }
 
-        // Soft cloud noise overlay
-        const imgData = ctxC.getImageData(0, 0, 512, 512);
-        const data = imgData.data;
-        for (let i = 0; i < data.length; i += 4) {
-          const noise = (Math.random() - 0.5) * (isWhite ? 10 : 6);
-          data[i] = Math.min(255, Math.max(0, data[i] + noise));
-          data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-          data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
+        // Layered soft radial gradients for organic cloudy marble depth (fast GPU-accelerated vector canvas)
+        for (let i = 0; i < 6; i++) {
+          const cx = 80 + (i * 70) + (Math.sin(i * 1.7) * 40);
+          const cy = 60 + ((i % 3) * 150) + (Math.cos(i * 1.3) * 50);
+          const r = 90 + (i * 20);
+          const grad = ctxC.createRadialGradient(cx, cy, 10, cx, cy, r);
+          if (isWhite) {
+            grad.addColorStop(0, 'rgba(230, 233, 240, 0.35)');
+            grad.addColorStop(1, 'rgba(247, 248, 250, 0)');
+          } else {
+            grad.addColorStop(0, 'rgba(35, 38, 48, 0.40)');
+            grad.addColorStop(1, 'rgba(20, 21, 24, 0)');
+          }
+          ctxC.fillStyle = grad;
+          ctxC.beginPath();
+          ctxC.arc(cx, cy, r, 0, Math.PI * 2);
+          ctxC.fill();
         }
-        ctxC.putImageData(imgData, 0, 0);
+
+        // Secondary organic fine capillary sub-veins (fast vector bezier curves)
+        ctxC.lineWidth = 1.0;
+        ctxR.lineWidth = 1.0;
+        ctxB.lineWidth = 1.0;
+        for (let s = 0; s < 5; s++) {
+          const startX = 60 + s * 90;
+          ctxC.strokeStyle = isWhite ? 'rgba(195, 200, 210, 0.28)' : 'rgba(200, 170, 70, 0.18)';
+          ctxR.strokeStyle = 'rgba(120, 120, 120, 0.20)';
+          ctxB.strokeStyle = 'rgba(110, 110, 110, 0.25)';
+          ctxC.beginPath();
+          ctxR.beginPath();
+          ctxB.beginPath();
+          ctxC.moveTo(startX, 0);
+          ctxR.moveTo(startX, 0);
+          ctxB.moveTo(startX, 0);
+          const cp1x = startX + (Math.sin(s) * 60);
+          const cp1y = 180 + (s * 30);
+          const cp2x = startX - (Math.cos(s) * 50);
+          const cp2y = 360 + (s * 25);
+          const endX = startX + (Math.sin(s * 2) * 80);
+          ctxC.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, 512);
+          ctxR.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, 512);
+          ctxB.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, 512);
+          ctxC.stroke();
+          ctxR.stroke();
+          ctxB.stroke();
+        }
       } else if (th === 'classic') {
         bumpScale = 0.01;
         // Warm Ivory or Deep Slate base
@@ -398,7 +434,7 @@
           clearcoat: 0.65,
           clearcoatRoughness: 0.15,
           envMapIntensity: 1.20,
-          side: THREE.DoubleSide
+          side: THREE.FrontSide
         });
         break;
       }
@@ -415,7 +451,7 @@
           clearcoat: 0.70,
           clearcoatRoughness: 0.12,
           envMapIntensity: 1.25,
-          side: THREE.DoubleSide
+          side: THREE.FrontSide
         });
         break;
       }
@@ -435,7 +471,7 @@
             clearcoat: 0.60,
             clearcoatRoughness: 0.12,
             envMapIntensity: 1.30,
-            side: THREE.DoubleSide
+            side: THREE.FrontSide
           });
         } else {
           material = new MaterialClass({
@@ -450,7 +486,7 @@
             clearcoat: 0.60,
             clearcoatRoughness: 0.12,
             envMapIntensity: 1.30,
-            side: THREE.DoubleSide
+            side: THREE.FrontSide
           });
         }
         break;
@@ -470,7 +506,7 @@
             clearcoat: 0.55,
             clearcoatRoughness: 0.15,
             envMapIntensity: 1.15,
-            side: THREE.DoubleSide
+            side: THREE.FrontSide
           });
         } else {
           material = new MaterialClass({
@@ -483,7 +519,7 @@
             clearcoat: 0.55,
             clearcoatRoughness: 0.15,
             envMapIntensity: 1.15,
-            side: THREE.DoubleSide
+            side: THREE.FrontSide
           });
         }
         break;
@@ -590,7 +626,7 @@
       clearcoat: 0.50,
       clearcoatRoughness: 0.15,
       envMapIntensity: 1.15,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
     mat.userData = { isSharedMaterial: true };
 
@@ -822,6 +858,17 @@
         0, 0, 0, 1
       ));
       headExtrudeGeom.translate(-(depth + 0.04) / 2, 0, 0);
+
+      // Invert triangle index winding to correct flipped face normals from reflection determinant (-1)
+      if (headExtrudeGeom.index && headExtrudeGeom.index.array) {
+        const indexArray = headExtrudeGeom.index.array;
+        for (let i = 0; i < indexArray.length; i += 3) {
+          const temp = indexArray[i + 1];
+          indexArray[i + 1] = indexArray[i + 2];
+          indexArray[i + 2] = temp;
+        }
+        headExtrudeGeom.index.needsUpdate = true;
+      }
       headExtrudeGeom.computeVertexNormals();
       headExtrudeGeom.userData = { isSharedGeometry: true };
       geometryCache.set('knight_head_extrude', headExtrudeGeom);
@@ -1193,7 +1240,7 @@
         metalness: 0.1,
         clearcoat: 0.3,
         clearcoatRoughness: 0.2,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
     } else {
       mat = new MaterialClass({
@@ -1202,7 +1249,7 @@
         metalness: 0.05,
         clearcoat: 0.3,
         clearcoatRoughness: 0.2,
-        side: THREE.DoubleSide
+        side: THREE.FrontSide
       });
     }
     mat.userData = { isSharedMaterial: true };

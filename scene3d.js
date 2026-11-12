@@ -2285,15 +2285,13 @@
 
     /**
      * Builds two procedural player armchairs on White (z = +9.2, facing -Z) and Black (z = -9.2, facing +Z) sides:
-     * ExtrudeGeometry beveled seat & backrest cushions with tufted buttons, LatheGeometry turned legs,
-     * and curved armrests on turned spindle supports.
+     * ExtrudeGeometry beveled seat & backrest cushions, LatheGeometry turned legs,
+     * InstancedMesh tufted buttons & spindles, and MeshStandardMaterial with receiveShadow.
      */
     buildChairs(textures) {
       this.chairsGroup = new THREE.Group();
       this.chairsGroup.name = 'playerChairs';
       this.environmentGroup.add(this.chairsGroup);
-
-      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
 
       let woodCol = 0x2e1910;
       let cushionCol = 0x54141b;
@@ -2308,20 +2306,28 @@
         cushionCol = 0x141a29; // dark cyber
       }
 
-      this.chairWoodMat = new matClass({
+      // Matte / non-clearcoat furniture surfaces use MeshStandardMaterial
+      this.chairWoodMat = new THREE.MeshStandardMaterial({
         color: woodCol,
-        roughness: 0.52,
-        metalness: 0.08,
-        clearcoat: 0.45,
-        clearcoatRoughness: 0.18
+        roughness: 0.55,
+        metalness: 0.08
       });
-      this.chairCushionMat = new matClass({
+      this.chairCushionMat = new THREE.MeshStandardMaterial({
         color: cushionCol,
         roughness: 0.65,
-        metalness: 0.04,
-        clearcoat: 0.30,
-        clearcoatRoughness: 0.30
+        metalness: 0.04
       });
+
+      const buttonGeo = new THREE.SphereGeometry(0.07, 12, 10);
+      buttonGeo.scale(1.0, 0.4, 1.0);
+      const buttonMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(cushionCol).multiplyScalar(0.72),
+        roughness: 0.75
+      });
+
+      const spindlePts = createTurnedChairLegPoints(1.15);
+      const spindleGeo = new THREE.LatheGeometry(spindlePts, 12);
+      const chairDummy = new THREE.Object3D();
 
       const createArmchair = () => {
         const chair = new THREE.Group();
@@ -2343,32 +2349,13 @@
         const seatMesh = new THREE.Mesh(seatGeo, this.chairCushionMat);
         seatMesh.position.set(0, -3.8, 0);
         seatMesh.receiveShadow = true;
-        seatMesh.castShadow = true;
         chair.add(seatMesh);
-
-        // Tufted Button Indentations on Seat Cushion
-        const buttonGeo = new THREE.SphereGeometry(0.07, 12, 10);
-        buttonGeo.scale(1.0, 0.4, 1.0);
-        const buttonMat = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(cushionCol).multiplyScalar(0.72),
-          roughness: 0.75
-        });
-        const seatTuftOffsets = [
-          [-1.1, -0.9], [0, -0.9], [1.1, -0.9],
-          [-1.1, 0.9], [0, 0.9], [1.1, 0.9]
-        ];
-        seatTuftOffsets.forEach(([bx, bz]) => {
-          const btn = new THREE.Mesh(buttonGeo, buttonMat);
-          btn.position.set(bx, -3.53, bz);
-          chair.add(btn);
-        });
 
         // Seat Frame Base
         const frameGeo = new THREE.BoxGeometry(4.2, 0.24, 4.0);
         const frameMesh = new THREE.Mesh(frameGeo, this.chairWoodMat);
         frameMesh.position.set(0, -4.15, 0);
         frameMesh.receiveShadow = true;
-        frameMesh.castShadow = true;
         chair.add(frameMesh);
 
         // 4 Turned Chair Legs (LatheGeometry reaching down to floor at y = -6.8)
@@ -2384,7 +2371,6 @@
           const chairLeg = new THREE.Mesh(chairLegGeo, this.chairWoodMat);
           chairLeg.position.set(cx, -4.15, cz);
           chairLeg.receiveShadow = true;
-          chairLeg.castShadow = true;
           chair.add(chairLeg);
         });
 
@@ -2404,21 +2390,39 @@
         const backrestMesh = new THREE.Mesh(backGeo, this.chairCushionMat);
         backrestMesh.position.set(0, -1.9, -1.8);
         backrestMesh.receiveShadow = true;
-        backrestMesh.castShadow = true;
         chair.add(backrestMesh);
 
-        // Tufted Buttons on Backrest
+        // InstancedMesh for 12 Tufted Buttons (6 on seat cushion + 6 on backrest cushion)
+        const chairButtons = new THREE.InstancedMesh(buttonGeo, buttonMat, 12);
+        chairButtons.receiveShadow = true;
+        let btnIdx = 0;
+
+        const seatTuftOffsets = [
+          [-1.1, -0.9], [0, -0.9], [1.1, -0.9],
+          [-1.1, 0.9], [0, 0.9], [1.1, 0.9]
+        ];
+        seatTuftOffsets.forEach(([bx, bz]) => {
+          chairDummy.position.set(bx, -3.53, bz);
+          chairDummy.rotation.set(0, 0, 0);
+          chairDummy.scale.set(1, 1, 1);
+          chairDummy.updateMatrix();
+          chairButtons.setMatrixAt(btnIdx++, chairDummy.matrix);
+        });
+
         const backTufts = [
           [-1.1, -1.3], [1.1, -1.3],
           [-1.1, -1.9], [1.1, -1.9],
           [-1.1, -2.5], [1.1, -2.5]
         ];
         backTufts.forEach(([tx, ty]) => {
-          const btn = new THREE.Mesh(buttonGeo, buttonMat);
-          btn.rotation.x = Math.PI / 2;
-          btn.position.set(tx, ty, -1.54);
-          chair.add(btn);
+          chairDummy.position.set(tx, ty, -1.54);
+          chairDummy.rotation.set(Math.PI / 2, 0, 0);
+          chairDummy.scale.set(1, 1, 1);
+          chairDummy.updateMatrix();
+          chairButtons.setMatrixAt(btnIdx++, chairDummy.matrix);
         });
+        chairButtons.instanceMatrix.needsUpdate = true;
+        chair.add(chairButtons);
 
         // Curved Armrests on Turned Spindle Supports
         const armRailShape = createRoundedRectShape(0.38, 3.4, 0.08);
@@ -2433,24 +2437,27 @@
         armRailGeo.rotateX(Math.PI / 2);
         armRailGeo.center();
 
-        const spindlePts = createTurnedChairLegPoints(1.15);
-        const spindleGeo = new THREE.LatheGeometry(spindlePts, 12);
+        // InstancedMesh for 4 turned armrest spindles
+        const chairSpindles = new THREE.InstancedMesh(spindleGeo, this.chairWoodMat, 4);
+        chairSpindles.receiveShadow = true;
+        let spIdx = 0;
 
         [-2.0, 2.0].forEach(ax => {
           const armRail = new THREE.Mesh(armRailGeo, this.chairWoodMat);
           armRail.position.set(ax, -2.20, 0);
           armRail.receiveShadow = true;
-          armRail.castShadow = true;
           chair.add(armRail);
 
-          // 2 Turned Spindles supporting each armrest
           [-1.2, 1.2].forEach(sz => {
-            const spindle = new THREE.Mesh(spindleGeo, this.chairWoodMat);
-            spindle.position.set(ax, -2.30, sz);
-            spindle.receiveShadow = true;
-            chair.add(spindle);
+            chairDummy.position.set(ax, -2.30, sz);
+            chairDummy.rotation.set(0, 0, 0);
+            chairDummy.scale.set(1, 1, 1);
+            chairDummy.updateMatrix();
+            chairSpindles.setMatrixAt(spIdx++, chairDummy.matrix);
           });
         });
+        chairSpindles.instanceMatrix.needsUpdate = true;
+        chair.add(chairSpindles);
 
         return chair;
       };
@@ -2499,9 +2506,9 @@
       this.floorMesh.receiveShadow = true;
       this.roomGroup.add(this.floorMesh);
 
-      // Under-Table Woven Rug / Carpet (22 x 0.04 x 19 at y = -6.78) with High-Frequency Tactile Weave Bump
+      // Under-Table Woven Rug / Carpet (22 x 0.04 x 19 at y = -6.78) - Matte Fabric uses MeshStandardMaterial
       const carpetGeo = new THREE.BoxGeometry(22.0, 0.04, 19.0);
-      this.carpetMat = new matClass({
+      this.carpetMat = new THREE.MeshStandardMaterial({
         map: textures.carpetTex,
         roughnessMap: textures.carpetRoughnessTex || null,
         bumpMap: textures.carpetBumpTex || null,
@@ -2514,8 +2521,8 @@
       this.carpetMesh.receiveShadow = true;
       this.roomGroup.add(this.carpetMesh);
 
-      // 4 Enclosing Walls (Width 68, Height 22, centered at y = 4.2)
-      this.wallMat = new matClass({
+      // 4 Enclosing Walls (Width 68, Height 22, centered at y = 4.2) - Matte Plaster uses MeshStandardMaterial
+      this.wallMat = new THREE.MeshStandardMaterial({
         map: textures.wallTex,
         roughnessMap: textures.wallRoughnessTex || null,
         bumpMap: textures.wallBumpTex || null,
@@ -2553,43 +2560,51 @@
       eastWall.receiveShadow = true;
       this.roomGroup.add(eastWall);
 
-      // 3D Raised Wainscoting Boiserie Frame Mouldings along lower walls (y = -4.2)
-      const boiserieMat = new matClass({
+      // 3D Raised Wainscoting Boiserie Frame Mouldings via InstancedMesh (20 Panels, 1 Draw Call)
+      const boiserieMat = new THREE.MeshStandardMaterial({
         color: this.theme === 'neon' ? 0x0a0f1d : (this.theme === 'marble' ? 0xe2e6ed : 0x221710),
         roughness: 0.60,
         metalness: 0.08
       });
       const boiserieGeo = new THREE.BoxGeometry(8.0, 3.8, 0.12);
+      const boiserieInstanced = new THREE.InstancedMesh(boiserieGeo, boiserieMat, 20);
+      boiserieInstanced.receiveShadow = true;
 
+      const panelDummy = new THREE.Object3D();
+      let bIdx = 0;
+
+      // North & South walls boiserie
       [-22, -11, 0, 11, 22].forEach(px => {
-        // North wall boiserie
-        const bpN = new THREE.Mesh(boiserieGeo, boiserieMat);
-        bpN.position.set(px, -4.2, -33.88);
-        bpN.receiveShadow = true;
-        this.roomGroup.add(bpN);
+        panelDummy.position.set(px, -4.2, -33.88);
+        panelDummy.rotation.set(0, 0, 0);
+        panelDummy.scale.set(1, 1, 1);
+        panelDummy.updateMatrix();
+        boiserieInstanced.setMatrixAt(bIdx++, panelDummy.matrix);
 
-        // South wall boiserie
-        const bpS = new THREE.Mesh(boiserieGeo, boiserieMat);
-        bpS.position.set(px, -4.2, 33.88);
-        bpS.receiveShadow = true;
-        this.roomGroup.add(bpS);
+        panelDummy.position.set(px, -4.2, 33.88);
+        panelDummy.rotation.set(0, 0, 0);
+        panelDummy.scale.set(1, 1, 1);
+        panelDummy.updateMatrix();
+        boiserieInstanced.setMatrixAt(bIdx++, panelDummy.matrix);
       });
 
+      // West & East walls boiserie
       [-22, -11, 0, 11, 22].forEach(pz => {
-        // West wall boiserie
-        const bpW = new THREE.Mesh(boiserieGeo, boiserieMat);
-        bpW.position.set(-33.88, -4.2, pz);
-        bpW.rotation.y = Math.PI / 2;
-        bpW.receiveShadow = true;
-        this.roomGroup.add(bpW);
+        panelDummy.position.set(-33.88, -4.2, pz);
+        panelDummy.rotation.set(0, Math.PI / 2, 0);
+        panelDummy.scale.set(1, 1, 1);
+        panelDummy.updateMatrix();
+        boiserieInstanced.setMatrixAt(bIdx++, panelDummy.matrix);
 
-        // East wall boiserie
-        const bpE = new THREE.Mesh(boiserieGeo, boiserieMat);
-        bpE.position.set(33.88, -4.2, pz);
-        bpE.rotation.y = -Math.PI / 2;
-        bpE.receiveShadow = true;
-        this.roomGroup.add(bpE);
+        panelDummy.position.set(33.88, -4.2, pz);
+        panelDummy.rotation.set(0, -Math.PI / 2, 0);
+        panelDummy.scale.set(1, 1, 1);
+        panelDummy.updateMatrix();
+        boiserieInstanced.setMatrixAt(bIdx++, panelDummy.matrix);
       });
+
+      boiserieInstanced.instanceMatrix.needsUpdate = true;
+      this.roomGroup.add(boiserieInstanced);
 
       // Chair Rail Moulding along walls at y = -2.1
       const chairRailN = new THREE.Mesh(new THREE.BoxGeometry(68.0, 0.22, 0.22), boiserieMat);
@@ -2650,7 +2665,7 @@
       // Ceiling at y = +15.2 (facing -Y down into room)
       const ceilingGeo = new THREE.PlaneGeometry(68.0, 68.0);
       ceilingGeo.rotateX(Math.PI / 2);
-      const ceilingMat = new matClass({
+      const ceilingMat = new THREE.MeshStandardMaterial({
         color: this.theme === 'neon' ? 0x05070e : (this.theme === 'marble' ? 0xedf0f5 : 0x2d241e),
         roughness: 0.9,
         metalness: 0.02
@@ -2660,7 +2675,7 @@
       this.roomGroup.add(ceilingMesh);
 
       // Baseboard Plinth running along floor perimeter at y = -6.4
-      const baseboardMat = new matClass({
+      const baseboardMat = new THREE.MeshStandardMaterial({
         color: this.theme === 'neon' ? 0x080c16 : 0x1e150f,
         roughness: 0.6,
         metalness: 0.1
@@ -2698,18 +2713,16 @@
       const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
 
       if (themeName === 'classic') {
-        // 1. Two hollow open wooden bookshelves ("Шафа для книг") with cornice crown moulding & varied/tilted books
+        // 1. Two hollow open wooden bookshelves ("Шафа для книг") with cornice crown moulding & InstancedMesh books
         const makeBookshelf = (bx, bz, rotY) => {
           const bsGroup = new THREE.Group();
           bsGroup.position.set(bx, 0, bz);
           bsGroup.rotation.y = rotY;
 
-          const shelfWoodMat = new matClass({
+          const shelfWoodMat = new THREE.MeshStandardMaterial({
             color: 0x2c170d,
             roughness: 0.58,
-            metalness: 0.08,
-            clearcoat: 0.35,
-            clearcoatRoughness: 0.20
+            metalness: 0.08
           });
 
           // Upright Side Walls (Left & Right)
@@ -2717,13 +2730,11 @@
           const leftSide = new THREE.Mesh(sideGeo, shelfWoodMat);
           leftSide.position.set(-3.82, -0.8, 0);
           leftSide.receiveShadow = true;
-          leftSide.castShadow = true;
           bsGroup.add(leftSide);
 
           const rightSide = new THREE.Mesh(sideGeo, shelfWoodMat);
           rightSide.position.set(3.82, -0.8, 0);
           rightSide.receiveShadow = true;
-          rightSide.castShadow = true;
           bsGroup.add(rightSide);
 
           // Back Wall Panel
@@ -2754,9 +2765,11 @@
           corniceMesh.receiveShadow = true;
           bsGroup.add(corniceMesh);
 
-          // 4 Horizontal Shelves
+          // 4 Horizontal Shelves & InstancedMesh Books
           const bookColors = [0x7f1d1d, 0x1e3a8a, 0x14532d, 0x78350f, 0x854d0e, 0x3f3f46, 0x581c87];
           const shelfY = [-4.6, -2.0, 0.6, 3.2];
+          const bookTransforms = [];
+          const dummyBook = new THREE.Object3D();
 
           shelfY.forEach((sy, sIdx) => {
             const board = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.22, 1.4), shelfWoodMat);
@@ -2764,41 +2777,61 @@
             board.receiveShadow = true;
             bsGroup.add(board);
 
-            // Fill shelves with varied books + leaning/tilted books
+            // Populate transforms and colors for books
             let curX = -3.4;
             let bCount = 0;
             while (curX < 3.1 && bCount < 22) {
               const bWidth = 0.22 + ((bCount * 7) % 5) * 0.035;
               const bHeight = 1.35 + ((bCount * 11) % 6) * 0.08;
-              const bMat = new matClass({
-                color: bookColors[(sIdx * 3 + bCount) % bookColors.length],
-                roughness: 0.65,
-                metalness: 0.06,
-                clearcoat: 0.25
-              });
+              const bColor = new THREE.Color(bookColors[(sIdx * 3 + bCount) % bookColors.length]);
 
-              const bookMesh = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, 1.1), bMat);
+              let posX = curX + bWidth / 2;
+              let posY = sy + bHeight / 2 + 0.11;
+              let posZ = 0.05;
+              let rotZ = 0;
 
-              // Add a leaning book resting against upright at the end of shelves
+              // Tilted leaning book resting naturally against upright
               if (sIdx % 2 === 0 && curX > 2.4 && bCount > 15) {
-                bookMesh.position.set(curX + bWidth / 2, sy + bHeight / 2 + 0.11, 0.05);
-                bookMesh.rotation.z = 0.28;
+                rotZ = 0.28;
                 curX += bWidth + 0.35;
               } else if (sIdx % 2 === 1 && curX < -2.8 && bCount === 0) {
-                bookMesh.position.set(curX + bWidth / 2 + 0.1, sy + bHeight / 2 + 0.11, 0.05);
-                bookMesh.rotation.z = -0.25;
+                posX += 0.1;
+                rotZ = -0.25;
                 curX += bWidth + 0.30;
               } else {
-                bookMesh.position.set(curX + bWidth / 2, sy + bHeight / 2 + 0.11, 0.05);
                 curX += bWidth + 0.03;
               }
 
-              bookMesh.receiveShadow = true;
-              bookMesh.castShadow = true;
-              bsGroup.add(bookMesh);
+              bookTransforms.push({
+                pos: [posX, posY, posZ],
+                rot: [0, 0, rotZ],
+                scale: [bWidth, bHeight, 1.1],
+                color: bColor
+              });
               bCount++;
             }
           });
+
+          // Single InstancedMesh for all books in this bookcase (Massive draw call reduction!)
+          const unitBookGeo = new THREE.BoxGeometry(1, 1, 1);
+          const bookInstMat = new THREE.MeshStandardMaterial({
+            roughness: 0.65,
+            metalness: 0.06
+          });
+          const booksInstancedMesh = new THREE.InstancedMesh(unitBookGeo, bookInstMat, bookTransforms.length);
+          booksInstancedMesh.receiveShadow = true;
+
+          bookTransforms.forEach((bt, idx) => {
+            dummyBook.position.set(bt.pos[0], bt.pos[1], bt.pos[2]);
+            dummyBook.rotation.set(bt.rot[0], bt.rot[1], bt.rot[2]);
+            dummyBook.scale.set(bt.scale[0], bt.scale[1], bt.scale[2]);
+            dummyBook.updateMatrix();
+            booksInstancedMesh.setMatrixAt(idx, dummyBook.matrix);
+            booksInstancedMesh.setColorAt(idx, bt.color);
+          });
+          booksInstancedMesh.instanceMatrix.needsUpdate = true;
+          if (booksInstancedMesh.instanceColor) booksInstancedMesh.instanceColor.needsUpdate = true;
+          bsGroup.add(booksInstancedMesh);
 
           return bsGroup;
         };
@@ -2812,7 +2845,7 @@
           paintGroup.position.set(px, py, pz);
           paintGroup.rotation.y = rotY;
 
-          // Multi-layer Gold Moulded Frame
+          // Multi-layer Gold Moulded Frame (distant wall painting - no castShadow)
           const goldMat = new matClass({
             color: 0xd4af37,
             roughness: 0.28,
@@ -2821,16 +2854,15 @@
             clearcoatRoughness: 0.15
           });
           const outerFrame = new THREE.Mesh(new THREE.BoxGeometry(9.2, 6.2, 0.4), goldMat);
-          outerFrame.castShadow = true;
           paintGroup.add(outerFrame);
 
-          // Inner Linen Liner
-          const linerMat = new matClass({ color: 0x221a14, roughness: 0.8 });
+          // Inner Linen Liner (Matte MeshStandardMaterial)
+          const linerMat = new THREE.MeshStandardMaterial({ color: 0x221a14, roughness: 0.8 });
           const liner = new THREE.Mesh(new THREE.BoxGeometry(8.4, 5.4, 0.42), linerMat);
           paintGroup.add(liner);
 
-          // Canvas with Classical Painting
-          const canvasMat = new matClass({
+          // Canvas with Classical Painting (Matte MeshStandardMaterial)
+          const canvasMat = new THREE.MeshStandardMaterial({
             map: tex,
             roughness: 0.72,
             metalness: 0.02
@@ -2858,24 +2890,22 @@
         this.decorGroup.add(makeFramedPainting(0, 4.5, 33.7, Math.PI, textures.paintingTex2));
 
       } else if (themeName === 'wood') {
-        // 1. Heavy Timber Ceiling Beams
-        const beamMat = new matClass({
+        // 1. Heavy Timber Ceiling Beams (Matte MeshStandardMaterial)
+        const beamMat = new THREE.MeshStandardMaterial({
           color: 0x3d2012,
           roughness: 0.70,
-          metalness: 0.05,
-          clearcoat: 0.20
+          metalness: 0.05
         });
         const beamGeo = new THREE.BoxGeometry(68.0, 1.2, 1.2);
         [-25, -15, -5, 5, 15, 25].forEach(bz => {
           const beam = new THREE.Mesh(beamGeo, beamMat);
           beam.position.set(0, 14.4, bz);
           beam.receiveShadow = true;
-          beam.castShadow = true;
           this.decorGroup.add(beam);
         });
 
         // 2. Rustic Bookshelf on East Wall with Books
-        const rusticShelfMat = new matClass({
+        const rusticShelfMat = new THREE.MeshStandardMaterial({
           color: 0x482816,
           roughness: 0.65,
           metalness: 0.04
@@ -2886,7 +2916,6 @@
 
         const eastShelf = new THREE.Mesh(new THREE.BoxGeometry(8.0, 10.0, 1.8), rusticShelfMat);
         eastShelf.receiveShadow = true;
-        eastShelf.castShadow = true;
         rusticGroup.add(eastShelf);
         this.decorGroup.add(rusticGroup);
 
@@ -2895,7 +2924,7 @@
         fireplaceGroup.position.set(-32.0, 0, 0);
         fireplaceGroup.rotation.y = Math.PI / 2;
 
-        const stoneMat = new matClass({
+        const stoneMat = new THREE.MeshStandardMaterial({
           color: 0x5a5652,
           roughness: 0.85,
           metalness: 0.05
@@ -2903,7 +2932,6 @@
         const mantel = new THREE.Mesh(new THREE.BoxGeometry(9.0, 9.5, 3.5), stoneMat);
         mantel.position.set(0, -2.05, 0);
         mantel.receiveShadow = true;
-        mantel.castShadow = true;
         fireplaceGroup.add(mantel);
 
         const fireboxMat = new THREE.MeshStandardMaterial({
@@ -2962,7 +2990,6 @@
           const shaft = new THREE.Mesh(columnShaftGeo, columnMat);
           shaft.position.set(0, 4.2, 0);
           shaft.receiveShadow = true;
-          shaft.castShadow = true;
           colGroup.add(shaft);
 
           const capital = new THREE.Mesh(capitalGeo, columnMat);
@@ -4223,10 +4250,10 @@
         }
       }
 
-      // Check board plane raycast (O(1) horizontal plane intersection)
-      const hitPoint = new THREE.Vector3();
+      // Check board plane raycast (O(1) mathematical ray-plane intersection against this.boardPlane)
+      const hitPoint = this.dragIntersectPoint || (this.dragIntersectPoint = new THREE.Vector3());
       if (this.raycaster.ray.intersectPlane(this.boardPlane, hitPoint)) {
-        if (hitPoint.x >= -4.0 && hitPoint.x <= 4.0 && hitPoint.z >= -4.0 && hitPoint.z <= 4.0) {
+        if (Math.abs(hitPoint.x) <= 4.0 && Math.abs(hitPoint.z) <= 4.0) {
           const sq = worldToSquare(hitPoint.x, hitPoint.z);
           if (sq) {
             this.boardClickCandidate = { square: sq };
@@ -4473,6 +4500,26 @@
     }
 
     /**
+     * Performs deferred raycasting against interactionPlane during piece drag (O(1) plane intersection)
+     */
+    performDeferredRaycast() {
+      if (!this.draggedPiece) return;
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const intersectPoint = this.dragIntersectPoint || (this.dragIntersectPoint = new THREE.Vector3());
+      if (this.raycaster.ray.intersectPlane(this.interactionPlane, intersectPoint)) {
+        this.draggedPiece.mesh.position.x = intersectPoint.x;
+        this.draggedPiece.mesh.position.z = intersectPoint.z;
+
+        // Track hovered square
+        const hovered = worldToSquare(intersectPoint.x, intersectPoint.z);
+        if (hovered !== this.hoveredSquare) {
+          this.hoveredSquare = hovered;
+        }
+      }
+      this.needsRaycast = false;
+    }
+
+    /**
      * Animation render loop with on-demand rendering and deferred raycasting
      */
     startAnimationLoop() {
@@ -4485,19 +4532,7 @@
 
         // 1. Deferred Raycast on requestAnimationFrame tick when dragging piece
         if (this.needsRaycast && this.draggedPiece) {
-          this.raycaster.setFromCamera(this.pointer, this.camera);
-          const intersectPoint = new THREE.Vector3();
-          if (this.raycaster.ray.intersectPlane(this.interactionPlane, intersectPoint)) {
-            this.draggedPiece.mesh.position.x = intersectPoint.x;
-            this.draggedPiece.mesh.position.z = intersectPoint.z;
-
-            // Track hovered square
-            const hovered = worldToSquare(intersectPoint.x, intersectPoint.z);
-            if (hovered !== this.hoveredSquare) {
-              this.hoveredSquare = hovered;
-            }
-          }
-          this.needsRaycast = false;
+          this.performDeferredRaycast();
         }
 
         // 2. Update active piece animations
@@ -4562,9 +4597,15 @@
           mats.forEach(m => {
             if (!m.userData?.isSharedMaterial) {
               if (m.map && !m.map.userData?.isSharedTexture) m.map.dispose();
+              if (m.roughnessMap && !m.roughnessMap.userData?.isSharedTexture) m.roughnessMap.dispose();
+              if (m.bumpMap && !m.bumpMap.userData?.isSharedTexture) m.bumpMap.dispose();
               m.dispose();
             }
           });
+        }
+        if (child.isInstancedMesh) {
+          if (child.instanceMatrix) child.instanceMatrix.dispose?.();
+          if (child.instanceColor) child.instanceColor.dispose?.();
         }
       });
     }
