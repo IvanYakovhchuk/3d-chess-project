@@ -97,6 +97,18 @@ def verify_pieces3d():
     assert "geometryCache.clear()" in content, "clearCache should clear geometryCache"
     print("    Validated geometryCache reuse across all pieces, 24 radial segments, and shared flags.")
 
+    print("[8] Checking Procedural PBR MeshPhysicalMaterial, Clearcoat & Multi-Map Textures...")
+    assert "MeshPhysicalMaterial" in content, "Missing MeshPhysicalMaterial"
+    assert "clearcoat:" in content, "Missing clearcoat configuration"
+    assert "clearcoatRoughness:" in content, "Missing clearcoatRoughness configuration"
+    assert "envMapIntensity" in content, "Missing envMapIntensity configuration"
+    assert "roughnessMap" in content, "Missing roughnessMap"
+    assert "bumpMap" in content, "Missing bumpMap"
+    assert "bumpScale" in content, "Missing bumpScale"
+    assert "getProceduralPBRMaps" in content, "Missing getProceduralPBRMaps"
+    assert "isSharedTexture: true" in content, "Missing isSharedTexture flag on cached textures"
+    print("    Validated PBR MeshPhysicalMaterial, clearcoat, envMapIntensity, and multi-channel procedural maps.")
+
     print("\n>>> ALL PIECES3D CHECKS PASSED SUCCESSFULLY! <<<")
 
 if __name__ == "__main__":

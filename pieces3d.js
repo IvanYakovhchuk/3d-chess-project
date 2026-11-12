@@ -94,76 +94,168 @@
   }
 
   /**
-   * Generate procedural canvas textures for marble and wood themes
+   * Procedural Multi-Channel PBR Texture Generator:
+   * Generates paired { map, roughnessMap, bumpMap, bumpScale } for realistic PBR shading
    */
-  function getProceduralTexture(theme, color) {
-    if (typeof document === 'undefined') return null;
-    const cacheKey = `${theme}_${color}`;
-    if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
+  function getProceduralPBRMaps(theme, color) {
+    if (typeof document === 'undefined') {
+      return { map: null, roughnessMap: null, bumpMap: null, bumpScale: 0.02 };
+    }
+    const th = normalizeTheme(theme);
+    const c = normalizeColor(color);
+    const mapKey = `pbr_${th}_${c}_map`;
+    const roughKey = `pbr_${th}_${c}_roughness`;
+    const bumpKey = `pbr_${th}_${c}_bump`;
+
+    if (textureCache.has(mapKey) && textureCache.has(roughKey) && textureCache.has(bumpKey)) {
+      const bumpScale = (th === 'wood' ? 0.02 : (th === 'marble' ? 0.015 : (th === 'classic' ? 0.01 : 0.008)));
+      return {
+        map: textureCache.get(mapKey),
+        roughnessMap: textureCache.get(roughKey),
+        bumpMap: textureCache.get(bumpKey),
+        bumpScale: bumpScale
+      };
+    }
 
     try {
       const THREE = getTHREE();
-      const canvas = document.createElement('canvas');
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
+      const isWhite = c === 'w';
 
-      if (theme === 'wood') {
-        const isWhite = color === 'w';
-        const base = isWhite ? '#dec59b' : '#3d2516';
+      // 1. Color Map Canvas
+      const colorCanvas = document.createElement('canvas');
+      colorCanvas.width = 512;
+      colorCanvas.height = 512;
+      const ctxC = colorCanvas.getContext('2d');
+
+      // 2. Roughness Map Canvas
+      const roughCanvas = document.createElement('canvas');
+      roughCanvas.width = 512;
+      roughCanvas.height = 512;
+      const ctxR = roughCanvas.getContext('2d');
+
+      // 3. Bump / Height Map Canvas
+      const bumpCanvas = document.createElement('canvas');
+      bumpCanvas.width = 512;
+      bumpCanvas.height = 512;
+      const ctxB = bumpCanvas.getContext('2d');
+
+      if (!ctxC || !ctxR || !ctxB) {
+        return { map: null, roughnessMap: null, bumpMap: null, bumpScale: 0.02 };
+      }
+
+      let bumpScale = 0.02;
+
+      if (th === 'wood') {
+        bumpScale = 0.02;
+        const baseColor = isWhite ? '#dec59b' : '#3d2516';
         const ring1 = isWhite ? '#ceae80' : '#29170c';
         const ring2 = isWhite ? '#eccfac' : '#4e301d';
 
-        ctx.fillStyle = base;
-        ctx.fillRect(0, 0, 512, 512);
+        // Diffuse
+        ctxC.fillStyle = baseColor;
+        ctxC.fillRect(0, 0, 512, 512);
 
-        // Subtle longitudinal grain & concentric growth rings
-        ctx.lineWidth = 1.5;
+        // Roughness: base satin sheen
+        ctxR.fillStyle = '#555555';
+        ctxR.fillRect(0, 0, 512, 512);
+
+        // Bump: neutral mid-gray base
+        ctxB.fillStyle = '#808080';
+        ctxB.fillRect(0, 0, 512, 512);
+
+        // Longitudinal wood grain curves
+        ctxC.lineWidth = 1.5;
+        ctxR.lineWidth = 1.5;
+        ctxB.lineWidth = 1.5;
+
         for (let i = 0; i < 70; i++) {
           const y = (i / 70) * 512;
-          ctx.strokeStyle = (i % 2 === 0 ? ring1 : ring2);
-          ctx.globalAlpha = 0.25 + (Math.sin(i * 0.4) * 0.15);
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.bezierCurveTo(170, y + Math.sin(i) * 12, 340, y - Math.cos(i) * 12, 512, y);
-          ctx.stroke();
+          ctxC.strokeStyle = (i % 2 === 0 ? ring1 : ring2);
+          ctxC.globalAlpha = 0.25 + (Math.sin(i * 0.4) * 0.15);
+          ctxC.beginPath();
+          ctxC.moveTo(0, y);
+          ctxC.bezierCurveTo(170, y + Math.sin(i) * 12, 340, y - Math.cos(i) * 12, 512, y);
+          ctxC.stroke();
+
+          // Roughness: open wood pores are rougher (brighter gray)
+          ctxR.strokeStyle = (i % 2 === 0 ? '#777777' : '#666666');
+          ctxR.globalAlpha = 0.20;
+          ctxR.beginPath();
+          ctxR.moveTo(0, y);
+          ctxR.bezierCurveTo(170, y + Math.sin(i) * 12, 340, y - Math.cos(i) * 12, 512, y);
+          ctxR.stroke();
+
+          // Bump: grain groove depth
+          ctxB.strokeStyle = (i % 2 === 0 ? '#606060' : '#959595');
+          ctxB.globalAlpha = 0.22;
+          ctxB.beginPath();
+          ctxB.moveTo(0, y);
+          ctxB.bezierCurveTo(170, y + Math.sin(i) * 12, 340, y - Math.cos(i) * 12, 512, y);
+          ctxB.stroke();
         }
 
         // Fine wood fibers
-        ctx.globalAlpha = 0.08;
-        ctx.fillStyle = isWhite ? '#ffffff' : '#000000';
+        ctxC.globalAlpha = 0.08;
+        ctxC.fillStyle = isWhite ? '#ffffff' : '#000000';
+        ctxB.globalAlpha = 0.12;
+        ctxB.fillStyle = '#505050';
         for (let x = 0; x < 512; x += 3) {
           if (Math.random() > 0.4) {
-            ctx.fillRect(x, 0, 1, 512);
+            ctxC.fillRect(x, 0, 1, 512);
+            ctxB.fillRect(x, 0, 1, 512);
           }
         }
-      } else if (theme === 'marble') {
-        const isWhite = color === 'w';
-        ctx.fillStyle = isWhite ? '#f7f8fa' : '#141518';
-        ctx.fillRect(0, 0, 512, 512);
+      } else if (th === 'marble') {
+        bumpScale = 0.015;
+        // Diffuse
+        ctxC.fillStyle = isWhite ? '#f7f8fa' : '#141518';
+        ctxC.fillRect(0, 0, 512, 512);
 
-        // Soft organic marble veining
+        // Roughness: polished high-gloss stone
+        ctxR.fillStyle = isWhite ? '#505050' : '#404040';
+        ctxR.fillRect(0, 0, 512, 512);
+
+        // Bump: neutral base
+        ctxB.fillStyle = '#808080';
+        ctxB.fillRect(0, 0, 512, 512);
+
+        // Veining
         const veinColor1 = isWhite ? 'rgba(180, 185, 195, 0.35)' : 'rgba(235, 235, 240, 0.22)';
-        const veinColor2 = isWhite ? 'rgba(140, 145, 155, 0.25)' : 'rgba(212, 175, 55, 0.25)'; // faint gold in black marble
+        const veinColor2 = isWhite ? 'rgba(140, 145, 155, 0.25)' : 'rgba(212, 175, 55, 0.25)';
 
-        ctx.lineWidth = 2.5;
+        ctxC.lineWidth = 2.5;
+        ctxR.lineWidth = 2.0;
+        ctxB.lineWidth = 2.0;
+
         for (let v = 0; v < 8; v++) {
-          ctx.strokeStyle = (v % 2 === 0) ? veinColor1 : veinColor2;
-          ctx.beginPath();
+          ctxC.strokeStyle = (v % 2 === 0) ? veinColor1 : veinColor2;
+          ctxR.strokeStyle = 'rgba(160, 160, 160, 0.35)'; // veins have slightly higher micro-roughness
+          ctxB.strokeStyle = (v % 2 === 0) ? 'rgba(90, 90, 90, 0.4)' : 'rgba(150, 150, 150, 0.35)';
+
+          ctxC.beginPath();
+          ctxR.beginPath();
+          ctxB.beginPath();
+
           let px = Math.random() * 512;
           let py = 0;
-          ctx.moveTo(px, py);
+          ctxC.moveTo(px, py);
+          ctxR.moveTo(px, py);
+          ctxB.moveTo(px, py);
+
           while (py < 512) {
             py += 15 + Math.random() * 25;
             px += (Math.random() - 0.48) * 35;
-            ctx.lineTo(px, py);
+            ctxC.lineTo(px, py);
+            ctxR.lineTo(px, py);
+            ctxB.lineTo(px, py);
           }
-          ctx.stroke();
+          ctxC.stroke();
+          ctxR.stroke();
+          ctxB.stroke();
         }
 
         // Soft cloud noise overlay
-        const imgData = ctx.getImageData(0, 0, 512, 512);
+        const imgData = ctxC.getImageData(0, 0, 512, 512);
         const data = imgData.data;
         for (let i = 0; i < data.length; i += 4) {
           const noise = (Math.random() - 0.5) * (isWhite ? 10 : 6);
@@ -171,22 +263,112 @@
           data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
           data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
         }
-        ctx.putImageData(imgData, 0, 0);
+        ctxC.putImageData(imgData, 0, 0);
+      } else if (th === 'classic') {
+        bumpScale = 0.01;
+        // Warm Ivory or Deep Slate base
+        ctxC.fillStyle = isWhite ? '#f4f0e6' : '#1e222a';
+        ctxC.fillRect(0, 0, 512, 512);
+
+        // Roughness: tournament satin sheen
+        ctxR.fillStyle = isWhite ? '#666666' : '#555555';
+        ctxR.fillRect(0, 0, 512, 512);
+
+        // Bump: neutral base
+        ctxB.fillStyle = '#808080';
+        ctxB.fillRect(0, 0, 512, 512);
+
+        // Micro-grain satin texture so pieces never look like flat plastic
+        ctxR.fillStyle = '#777777';
+        ctxR.globalAlpha = 0.08;
+        ctxB.fillStyle = '#686868';
+        ctxB.globalAlpha = 0.10;
+        for (let i = 0; i < 300; i++) {
+          const rx = Math.random() * 512;
+          const ry = Math.random() * 512;
+          const rw = 2 + Math.random() * 4;
+          const rh = 1 + Math.random() * 2;
+          ctxR.fillRect(rx, ry, rw, rh);
+          ctxB.fillRect(rx, ry, rw, rh);
+        }
+      } else if (th === 'neon') {
+        bumpScale = 0.008;
+        // Diffuse
+        ctxC.fillStyle = isWhite ? '#00e5ff' : '#ff007f';
+        ctxC.fillRect(0, 0, 512, 512);
+
+        // Roughness: brushed anodized metal sheen
+        ctxR.fillStyle = '#383838';
+        ctxR.fillRect(0, 0, 512, 512);
+
+        // Bump: neutral base
+        ctxB.fillStyle = '#808080';
+        ctxB.fillRect(0, 0, 512, 512);
+
+        // Brushed metallic streaks
+        ctxR.strokeStyle = '#505050';
+        ctxR.globalAlpha = 0.15;
+        ctxB.strokeStyle = '#686868';
+        ctxB.globalAlpha = 0.18;
+        for (let y = 0; y < 512; y += 4) {
+          if (Math.random() > 0.4) {
+            ctxR.beginPath();
+            ctxR.moveTo(0, y);
+            ctxR.lineTo(512, y);
+            ctxR.stroke();
+
+            ctxB.beginPath();
+            ctxB.moveTo(0, y);
+            ctxB.lineTo(512, y);
+            ctxB.stroke();
+          }
+        }
       }
 
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(1.5, 2.5);
-      textureCache.set(cacheKey, texture);
-      return texture;
+      // Convert to THREE.CanvasTexture and cache
+      const mapTexture = new THREE.CanvasTexture(colorCanvas);
+      mapTexture.wrapS = THREE.RepeatWrapping;
+      mapTexture.wrapT = THREE.RepeatWrapping;
+      mapTexture.repeat.set(1.5, 2.5);
+      mapTexture.userData = { isSharedTexture: true };
+      textureCache.set(mapKey, mapTexture);
+
+      const roughTexture = new THREE.CanvasTexture(roughCanvas);
+      roughTexture.wrapS = THREE.RepeatWrapping;
+      roughTexture.wrapT = THREE.RepeatWrapping;
+      roughTexture.repeat.set(1.5, 2.5);
+      roughTexture.userData = { isSharedTexture: true };
+      textureCache.set(roughKey, roughTexture);
+
+      const bumpTexture = new THREE.CanvasTexture(bumpCanvas);
+      bumpTexture.wrapS = THREE.RepeatWrapping;
+      bumpTexture.wrapT = THREE.RepeatWrapping;
+      bumpTexture.repeat.set(1.5, 2.5);
+      bumpTexture.userData = { isSharedTexture: true };
+      textureCache.set(bumpKey, bumpTexture);
+
+      return {
+        map: mapTexture,
+        roughnessMap: roughTexture,
+        bumpMap: bumpTexture,
+        bumpScale: bumpScale
+      };
     } catch (e) {
-      return null;
+      return { map: null, roughnessMap: null, bumpMap: null, bumpScale: 0.02 };
     }
   }
 
   /**
-   * Material Factory: Builds high-end MeshPhysicalMaterial / MeshStandardMaterial for White & Black
+   * Backward-compatible accessor for primary diffuse texture
+   */
+  function getProceduralTexture(theme, color) {
+    const pbr = getProceduralPBRMaps(theme, color);
+    return pbr ? pbr.map : null;
+  }
+
+  /**
+   * Material Factory: Builds high-end MeshPhysicalMaterial for White & Black
+   * Featuring clearcoat lacquer, envMap reflections, and multi-channel procedural PBR maps
    */
   function getMaterial(color, theme) {
     const THREE = getTHREE();
@@ -201,54 +383,73 @@
     const isWhite = c === 'w';
     let material;
     const MaterialClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+    const pbr = getProceduralPBRMaps(th, c);
 
     switch (th) {
       case 'wood': {
-        const tex = getProceduralTexture('wood', c);
         material = new MaterialClass({
           color: isWhite ? 0xe2c69e : 0x3b2212,
-          map: tex || null,
-          roughness: 0.38,
+          map: pbr.map || null,
+          roughnessMap: pbr.roughnessMap || null,
+          bumpMap: pbr.bumpMap || null,
+          bumpScale: pbr.bumpScale || 0.02,
+          roughness: 0.36,
           metalness: 0.02,
-          clearcoat: 0.20,
-          clearcoatRoughness: 0.18,
+          clearcoat: 0.65,
+          clearcoatRoughness: 0.15,
+          envMapIntensity: 1.20,
           side: THREE.DoubleSide
         });
         break;
       }
 
       case 'marble': {
-        const tex = getProceduralTexture('marble', c);
         material = new MaterialClass({
           color: isWhite ? 0xf4f0e6 : 0x1e222a,
-          map: tex || null,
-          roughness: isWhite ? 0.38 : 0.30,
+          map: pbr.map || null,
+          roughnessMap: pbr.roughnessMap || null,
+          bumpMap: pbr.bumpMap || null,
+          bumpScale: pbr.bumpScale || 0.015,
+          roughness: isWhite ? 0.35 : 0.28,
           metalness: isWhite ? 0.04 : 0.10,
-          clearcoat: 0.25,
+          clearcoat: 0.70,
           clearcoatRoughness: 0.12,
+          envMapIntensity: 1.25,
           side: THREE.DoubleSide
         });
         break;
       }
 
       case 'neon': {
-        // Futuristic Cyberpunk / Tron theme: high emissive glow, high metalness
+        // Futuristic Cyberpunk / Tron theme: high emissive glow, high metalness, clearcoat lacquer
         if (isWhite) {
-          material = new THREE.MeshStandardMaterial({
+          material = new MaterialClass({
             color: 0x00ffff,
             emissive: 0x009ec3,
             emissiveIntensity: 0.55,
-            roughness: 0.25,
-            metalness: 0.70,
+            roughnessMap: pbr.roughnessMap || null,
+            bumpMap: pbr.bumpMap || null,
+            bumpScale: pbr.bumpScale || 0.008,
+            roughness: 0.22,
+            metalness: 0.75,
+            clearcoat: 0.60,
+            clearcoatRoughness: 0.12,
+            envMapIntensity: 1.30,
             side: THREE.DoubleSide
           });
         } else {
-          material = new THREE.MeshStandardMaterial({
+          material = new MaterialClass({
             color: 0xff007f,
             emissive: 0xa8004f,
             emissiveIntensity: 0.55,
-            roughness: 0.25,
-            metalness: 0.70,
+            roughnessMap: pbr.roughnessMap || null,
+            bumpMap: pbr.bumpMap || null,
+            bumpScale: pbr.bumpScale || 0.008,
+            roughness: 0.22,
+            metalness: 0.75,
+            clearcoat: 0.60,
+            clearcoatRoughness: 0.12,
+            envMapIntensity: 1.30,
             side: THREE.DoubleSide
           });
         }
@@ -257,23 +458,31 @@
 
       case 'classic':
       default: {
-        // High-contrast Tournament Staunton: Rich Warm Ivory vs Deep Obsidian Slate
+        // High-contrast Tournament Staunton: Rich Warm Ivory vs Deep Obsidian Slate with clearcoat
         if (isWhite) {
           material = new MaterialClass({
             color: 0xf4f0e6,
-            roughness: 0.45,
-            metalness: 0.05,
-            clearcoat: 0.10,
-            clearcoatRoughness: 0.18,
+            roughnessMap: pbr.roughnessMap || null,
+            bumpMap: pbr.bumpMap || null,
+            bumpScale: pbr.bumpScale || 0.01,
+            roughness: 0.42,
+            metalness: 0.04,
+            clearcoat: 0.55,
+            clearcoatRoughness: 0.15,
+            envMapIntensity: 1.15,
             side: THREE.DoubleSide
           });
         } else {
           material = new MaterialClass({
             color: 0x1e222a,
-            roughness: 0.35,
-            metalness: 0.12,
-            clearcoat: 0.25,
-            clearcoatRoughness: 0.18,
+            roughnessMap: pbr.roughnessMap || null,
+            bumpMap: pbr.bumpMap || null,
+            bumpScale: pbr.bumpScale || 0.01,
+            roughness: 0.32,
+            metalness: 0.10,
+            clearcoat: 0.55,
+            clearcoatRoughness: 0.15,
+            envMapIntensity: 1.15,
             side: THREE.DoubleSide
           });
         }
@@ -373,11 +582,14 @@
       outlineColor = (c === 'w') ? 0x14171d : 0xe2e8f0;
     }
 
-    const MaterialClass = THREE.MeshStandardMaterial || THREE.MeshBasicMaterial;
+    const MaterialClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
     const mat = new MaterialClass({
       color: outlineColor,
-      roughness: 0.40,
-      metalness: 0.20,
+      roughness: 0.35,
+      metalness: 0.25,
+      clearcoat: 0.50,
+      clearcoatRoughness: 0.15,
+      envMapIntensity: 1.15,
       side: THREE.DoubleSide
     });
     mat.userData = { isSharedMaterial: true };
@@ -972,18 +1184,25 @@
     if (slotMaterialCache.has(key)) return slotMaterialCache.get(key);
 
     const THREE = getTHREE();
+    const MaterialClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
     let mat;
     if (th === 'neon') {
-      mat = new THREE.MeshStandardMaterial({
+      mat = new MaterialClass({
         color: 0x111116,
         roughness: 0.8,
-        metalness: 0.1
+        metalness: 0.1,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.2,
+        side: THREE.DoubleSide
       });
     } else {
-      mat = new THREE.MeshStandardMaterial({
+      mat = new MaterialClass({
         color: c === 'w' ? 0x9e9788 : 0x111114,
         roughness: 0.8,
-        metalness: 0.05
+        metalness: 0.05,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.2,
+        side: THREE.DoubleSide
       });
     }
     mat.userData = { isSharedMaterial: true };
@@ -1644,6 +1863,8 @@
     getMode,
     getMaterial,
     getOutlineMaterial,
+    getProceduralPBRMaps,
+    getProceduralTexture,
     updatePieceTheme,
     clearCache,
     geometryCache,

@@ -79,6 +79,69 @@
     return 1 - (1 - t) * (1 - t);
   }
 
+  // Procedural 3D Geometric Helpers (Extrude, Lathe, Shapes & Cornices)
+  function createRoundedRectShape(w, d, r) {
+    const shape = new THREE.Shape();
+    const hw = w / 2, hd = d / 2;
+    shape.moveTo(-hw + r, -hd);
+    shape.lineTo(hw - r, -hd);
+    shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
+    shape.lineTo(hw, hd - r);
+    shape.quadraticCurveTo(hw, hd, hw - r, hd);
+    shape.lineTo(-hw + r, hd);
+    shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
+    shape.lineTo(-hw, -hd + r);
+    shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+    return shape;
+  }
+
+  function createTurnedLegPoints(height) {
+    const pts = [];
+    pts.push(new THREE.Vector2(0.36, 0));
+    pts.push(new THREE.Vector2(0.36, -height * 0.10));
+    pts.push(new THREE.Vector2(0.28, -height * 0.12));
+    pts.push(new THREE.Vector2(0.38, -height * 0.16));
+    pts.push(new THREE.Vector2(0.30, -height * 0.20));
+    pts.push(new THREE.Vector2(0.38, -height * 0.32));
+    pts.push(new THREE.Vector2(0.32, -height * 0.44));
+    pts.push(new THREE.Vector2(0.36, -height * 0.55));
+    pts.push(new THREE.Vector2(0.28, -height * 0.60));
+    pts.push(new THREE.Vector2(0.25, -height * 0.78));
+    pts.push(new THREE.Vector2(0.22, -height * 0.90));
+    pts.push(new THREE.Vector2(0.34, -height * 0.94));
+    pts.push(new THREE.Vector2(0.32, -height * 0.98));
+    pts.push(new THREE.Vector2(0.00, -height));
+    return pts;
+  }
+
+  function createTurnedChairLegPoints(height) {
+    const pts = [];
+    pts.push(new THREE.Vector2(0.14, 0));
+    pts.push(new THREE.Vector2(0.14, -height * 0.15));
+    pts.push(new THREE.Vector2(0.11, -height * 0.18));
+    pts.push(new THREE.Vector2(0.15, -height * 0.25));
+    pts.push(new THREE.Vector2(0.12, -height * 0.30));
+    pts.push(new THREE.Vector2(0.15, -height * 0.45));
+    pts.push(new THREE.Vector2(0.12, -height * 0.60));
+    pts.push(new THREE.Vector2(0.10, -height * 0.85));
+    pts.push(new THREE.Vector2(0.13, -height * 0.92));
+    pts.push(new THREE.Vector2(0.11, -height * 0.97));
+    pts.push(new THREE.Vector2(0.00, -height));
+    return pts;
+  }
+
+  function createCorniceShape() {
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    shape.lineTo(0.35, 0.20);
+    shape.lineTo(0.48, 0.45);
+    shape.lineTo(0.65, 0.75);
+    shape.lineTo(0.75, 1.00);
+    shape.lineTo(0, 1.00);
+    shape.closePath();
+    return shape;
+  }
+
   // Procedural Canvas Texture Generator for Board Themes & 3D Room Environment
   const TextureCache = {};
 
@@ -110,114 +173,203 @@
       tableColor = '#22150f'; // deep rich mahogany
     }
 
-    function createSquareTexture(baseColor, isLight, type) {
-      const c = document.createElement('canvas');
-      c.width = 256;
-      c.height = 256;
-      const g = c.getContext('2d');
-      g.fillStyle = baseColor;
-      g.fillRect(0, 0, 256, 256);
+    // Procedural PBR Multi-Map Generator for Squares
+    function createSquarePBRTextures(baseColor, isLight, type) {
+      const mc = document.createElement('canvas');
+      mc.width = 256; mc.height = 256;
+      const mg = mc.getContext('2d');
+      mg.fillStyle = baseColor;
+      mg.fillRect(0, 0, 256, 256);
+
+      const rc = document.createElement('canvas');
+      rc.width = 256; rc.height = 256;
+      const rg = rc.getContext('2d');
+      rg.fillStyle = '#4c4c4c'; // base satin
+      rg.fillRect(0, 0, 256, 256);
+
+      const bc = document.createElement('canvas');
+      bc.width = 256; bc.height = 256;
+      const bg = bc.getContext('2d');
+      bg.fillStyle = '#808080'; // neutral height
+      bg.fillRect(0, 0, 256, 256);
 
       if (type === 'wood') {
-        // Wood grain rings & subtle stripes
-        g.fillStyle = isLight ? 'rgba(160, 110, 60, 0.08)' : 'rgba(40, 20, 10, 0.15)';
+        mg.fillStyle = isLight ? 'rgba(160, 110, 60, 0.08)' : 'rgba(40, 20, 10, 0.15)';
+        rg.fillStyle = 'rgba(255, 255, 255, 0.18)';
+        bg.fillStyle = 'rgba(0, 0, 0, 0.15)';
         for (let i = 0; i < 20; i++) {
           const y = (i * 13) % 256;
-          g.fillRect(0, y, 256, 3 + (i % 4));
+          mg.fillRect(0, y, 256, 3 + (i % 4));
+          rg.fillRect(0, y, 256, 2);
+          bg.fillRect(0, y, 256, 1.5);
         }
-        g.strokeStyle = isLight ? 'rgba(120, 80, 40, 0.05)' : 'rgba(0, 0, 0, 0.12)';
-        g.lineWidth = 1.5;
+        mg.strokeStyle = isLight ? 'rgba(120, 80, 40, 0.05)' : 'rgba(0, 0, 0, 0.12)';
+        mg.lineWidth = 1.5;
+        bg.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        bg.lineWidth = 1.2;
         for (let i = 0; i < 8; i++) {
-          g.beginPath();
-          g.arc(128, -50 + i * 40, 100 + i * 20, 0, Math.PI * 2);
-          g.stroke();
+          mg.beginPath();
+          mg.arc(128, -50 + i * 40, 100 + i * 20, 0, Math.PI * 2);
+          mg.stroke();
+          bg.beginPath();
+          bg.arc(128, -50 + i * 40, 100 + i * 20, 0, Math.PI * 2);
+          bg.stroke();
         }
       } else if (type === 'marble') {
-        // Subtle marble veins
-        g.strokeStyle = isLight ? 'rgba(100, 115, 130, 0.12)' : 'rgba(240, 245, 255, 0.14)';
-        g.lineWidth = 1.2;
+        rg.fillStyle = '#2b2b2b';
+        rg.fillRect(0, 0, 256, 256);
+        mg.strokeStyle = isLight ? 'rgba(100, 115, 130, 0.12)' : 'rgba(240, 245, 255, 0.14)';
+        mg.lineWidth = 1.2;
+        rg.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        rg.lineWidth = 1.5;
+        bg.strokeStyle = 'rgba(0, 0, 0, 0.20)';
+        bg.lineWidth = 1.2;
         for (let v = 0; v < 4; v++) {
-          g.beginPath();
+          mg.beginPath(); rg.beginPath(); bg.beginPath();
           let x = (v * 70) % 256;
           let y = 0;
-          g.moveTo(x, y);
+          mg.moveTo(x, y); rg.moveTo(x, y); bg.moveTo(x, y);
           while (y < 256) {
             x += (Math.random() - 0.48) * 14;
             y += 8 + Math.random() * 10;
-            g.lineTo(x, y);
+            mg.lineTo(x, y); rg.lineTo(x, y); bg.lineTo(x, y);
           }
-          g.stroke();
+          mg.stroke(); rg.stroke(); bg.stroke();
         }
       } else if (type === 'neon') {
-        // Cyber grid & glowing edge
         const glowColor = isLight ? '#00e5ff' : '#d500f9';
-        g.strokeStyle = glowColor;
-        g.lineWidth = 3;
-        g.strokeRect(2, 2, 252, 252);
-        g.fillStyle = isLight ? 'rgba(0, 229, 255, 0.04)' : 'rgba(213, 0, 249, 0.04)';
-        g.fillRect(4, 4, 248, 248);
+        mg.strokeStyle = glowColor;
+        mg.lineWidth = 3;
+        mg.strokeRect(2, 2, 252, 252);
+        mg.fillStyle = isLight ? 'rgba(0, 229, 255, 0.04)' : 'rgba(213, 0, 249, 0.04)';
+        mg.fillRect(4, 4, 248, 248);
+        rg.fillStyle = '#222222';
+        rg.fillRect(0, 0, 256, 256);
+        bg.strokeStyle = '#ffffff';
+        bg.lineWidth = 2;
+        bg.strokeRect(2, 2, 252, 252);
       } else {
-        // Classic: Completely clean, uniform matte surface without noisy gradients
-        g.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.04)';
-        g.lineWidth = 1;
-        g.strokeRect(0, 0, 256, 256);
+        rg.fillStyle = '#484848';
+        rg.fillRect(0, 0, 256, 256);
+        mg.strokeStyle = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.04)';
+        mg.lineWidth = 1;
+        mg.strokeRect(0, 0, 256, 256);
+        bg.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+        bg.lineWidth = 1.5;
+        bg.strokeRect(1, 1, 254, 254);
       }
 
-      const tex = new THREE.CanvasTexture(c);
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.userData = { isSharedTexture: true };
-      return tex;
+      const map = new THREE.CanvasTexture(mc);
+      map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping;
+      map.userData = { isSharedTexture: true };
+
+      const roughnessMap = new THREE.CanvasTexture(rc);
+      roughnessMap.wrapS = roughnessMap.wrapT = THREE.ClampToEdgeWrapping;
+      roughnessMap.userData = { isSharedTexture: true };
+
+      const bumpMap = new THREE.CanvasTexture(bc);
+      bumpMap.wrapS = bumpMap.wrapT = THREE.ClampToEdgeWrapping;
+      bumpMap.userData = { isSharedTexture: true };
+
+      return { map, roughnessMap, bumpMap };
     }
 
-    const lightTex = createSquareTexture(lightColor, true, theme);
-    const darkTex = createSquareTexture(darkColor, false, theme);
+    const lightPBR = createSquarePBRTextures(lightColor, true, theme);
+    const darkPBR = createSquarePBRTextures(darkColor, false, theme);
+    const lightTex = lightPBR.map;
+    const darkTex = darkPBR.map;
 
-    // Frame Texture
-    const frameCanvas = document.createElement('canvas');
-    frameCanvas.width = 512;
-    frameCanvas.height = 512;
-    const fctx = frameCanvas.getContext('2d');
-    fctx.fillStyle = frameColor;
-    fctx.fillRect(0, 0, 512, 512);
+    // Procedural PBR Multi-Map Generator for Frame
+    function createFramePBRTextures(thm) {
+      const mc = document.createElement('canvas');
+      mc.width = 512; mc.height = 512;
+      const mg = mc.getContext('2d');
+      mg.fillStyle = frameColor;
+      mg.fillRect(0, 0, 512, 512);
 
-    if (theme === 'wood') {
-      fctx.fillStyle = 'rgba(20, 8, 3, 0.2)';
-      for (let i = 0; i < 40; i++) {
-        fctx.fillRect(0, i * 13, 512, 4);
-      }
-    } else if (theme === 'marble') {
-      fctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      fctx.lineWidth = 2;
-      for (let i = 0; i < 6; i++) {
-        fctx.beginPath();
-        fctx.moveTo(i * 90, 0);
-        fctx.lineTo(i * 90 + 60, 512);
-        fctx.stroke();
-      }
-    } else if (theme === 'neon') {
-      fctx.strokeStyle = '#00e5ff';
-      fctx.lineWidth = 4;
-      fctx.strokeRect(4, 4, 504, 504);
-      fctx.strokeStyle = '#d500f9';
-      fctx.strokeRect(12, 12, 488, 488);
-    } else {
-      // Classic: Dark anthracite matte frame
-      fctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-      fctx.fillRect(0, 0, 512, 512);
-    }
-    const frameTex = new THREE.CanvasTexture(frameCanvas);
-    frameTex.userData = { isSharedTexture: true };
+      const rc = document.createElement('canvas');
+      rc.width = 512; rc.height = 512;
+      const rg = rc.getContext('2d');
+      rg.fillStyle = '#505050';
+      rg.fillRect(0, 0, 512, 512);
 
-    // Procedural Floor Texture (Repeating Parquet / Walnut Planks / Checkered Marble / Cyber Grid)
-    function createFloorTexture(thm) {
-      const fc = document.createElement('canvas');
-      fc.width = 512;
-      fc.height = 512;
-      const g = fc.getContext('2d');
+      const bc = document.createElement('canvas');
+      bc.width = 512; bc.height = 512;
+      const bg = bc.getContext('2d');
+      bg.fillStyle = '#808080';
+      bg.fillRect(0, 0, 512, 512);
 
       if (thm === 'wood') {
-        // Rustic wide-plank walnut timber floor
+        mg.fillStyle = 'rgba(20, 8, 3, 0.2)';
+        rg.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        bg.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        for (let i = 0; i < 40; i++) {
+          mg.fillRect(0, i * 13, 512, 4);
+          rg.fillRect(0, i * 13, 512, 2);
+          bg.fillRect(0, i * 13, 512, 2);
+        }
+      } else if (thm === 'marble') {
+        mg.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        mg.lineWidth = 2;
+        rg.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        rg.lineWidth = 2;
+        bg.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+        bg.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          mg.beginPath(); rg.beginPath(); bg.beginPath();
+          mg.moveTo(i * 90, 0); rg.moveTo(i * 90, 0); bg.moveTo(i * 90, 0);
+          mg.lineTo(i * 90 + 60, 512); rg.lineTo(i * 90 + 60, 512); bg.lineTo(i * 90 + 60, 512);
+          mg.stroke(); rg.stroke(); bg.stroke();
+        }
+      } else if (thm === 'neon') {
+        mg.strokeStyle = '#00e5ff';
+        mg.lineWidth = 4;
+        mg.strokeRect(4, 4, 504, 504);
+        mg.strokeStyle = '#d500f9';
+        mg.strokeRect(12, 12, 488, 488);
+        bg.strokeStyle = '#ffffff';
+        bg.lineWidth = 3;
+        bg.strokeRect(4, 4, 504, 504);
+      } else {
+        mg.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        mg.fillRect(0, 0, 512, 512);
+        bg.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+        bg.lineWidth = 3;
+        bg.strokeRect(4, 4, 504, 504);
+      }
+
+      const map = new THREE.CanvasTexture(mc);
+      map.userData = { isSharedTexture: true };
+      const roughnessMap = new THREE.CanvasTexture(rc);
+      roughnessMap.userData = { isSharedTexture: true };
+      const bumpMap = new THREE.CanvasTexture(bc);
+      bumpMap.userData = { isSharedTexture: true };
+
+      return { map, roughnessMap, bumpMap };
+    }
+
+    const framePBR = createFramePBRTextures(theme);
+    const frameTex = framePBR.map;
+
+    // Procedural Floor PBR Multi-Map Generator
+    function createFloorPBRTextures(thm) {
+      const fc = document.createElement('canvas');
+      fc.width = 512; fc.height = 512;
+      const g = fc.getContext('2d');
+
+      const rc = document.createElement('canvas');
+      rc.width = 512; rc.height = 512;
+      const rg = rc.getContext('2d');
+      rg.fillStyle = '#555555'; // semi-gloss
+      rg.fillRect(0, 0, 512, 512);
+
+      const bc = document.createElement('canvas');
+      bc.width = 512; bc.height = 512;
+      const bg = bc.getContext('2d');
+      bg.fillStyle = '#808080';
+      bg.fillRect(0, 0, 512, 512);
+
+      if (thm === 'wood') {
         g.fillStyle = '#3a2012';
         g.fillRect(0, 0, 512, 512);
         const plankHeight = 64;
@@ -229,14 +381,24 @@
           g.fillStyle = 'rgba(20, 10, 5, 0.18)';
           for (let s = 0; s < 6; s++) {
             g.fillRect(0, y + 8 + s * 9, 512, 2);
+            bg.fillStyle = 'rgba(0, 0, 0, 0.12)';
+            bg.fillRect(0, y + 8 + s * 9, 512, 2);
           }
           const shift = (r % 2) * 256;
           g.fillStyle = '#1c0d06';
           g.fillRect(shift, y, 3, plankHeight);
           g.fillRect((shift + 256) % 512, y, 3, plankHeight);
+          // Recessed joints
+          bg.fillStyle = '#222222';
+          bg.fillRect(0, y + plankHeight - 3, 512, 3);
+          bg.fillRect(shift, y, 3, plankHeight);
+          bg.fillRect((shift + 256) % 512, y, 3, plankHeight);
+          rg.fillStyle = '#dddddd'; // matte seams
+          rg.fillRect(0, y + plankHeight - 3, 512, 3);
+          rg.fillRect(shift, y, 3, plankHeight);
+          rg.fillRect((shift + 256) % 512, y, 3, plankHeight);
         }
       } else if (thm === 'marble') {
-        // Grand palace checkered white & dark-slate marble floor tiles
         g.fillStyle = '#16191f';
         g.fillRect(0, 0, 512, 512);
         const tileSize = 128;
@@ -253,10 +415,16 @@
             g.moveTo(x + 10, y + 20);
             g.lineTo(x + tileSize - 20, y + tileSize - 15);
             g.stroke();
+            // Grout lines
+            bg.strokeStyle = '#222222';
+            bg.lineWidth = 3;
+            bg.strokeRect(x, y, tileSize, tileSize);
+            rg.strokeStyle = '#cccccc';
+            rg.lineWidth = 3;
+            rg.strokeRect(x, y, tileSize, tileSize);
           }
         }
       } else if (thm === 'neon') {
-        // Cyberpunk dark carbon floor with glowing cyan & magenta laser grid
         g.fillStyle = '#060810';
         g.fillRect(0, 0, 512, 512);
         g.strokeStyle = '#0e1424';
@@ -297,30 +465,66 @@
             g.fillStyle = 'rgba(30, 15, 5, 0.12)';
             g.fillRect(x + 1, y + 10, bW - 2, 2);
             g.fillRect(x + 1, y + 20, bW - 2, 2);
+            bg.strokeStyle = '#2b170e';
+            bg.lineWidth = 1.5;
+            bg.strokeRect(x, y, bW, bH);
+            rg.strokeStyle = '#aaaaaa';
+            rg.lineWidth = 1.5;
+            rg.strokeRect(x, y, bW, bH);
           }
         }
       }
 
-      const fTex = new THREE.CanvasTexture(fc);
-      fTex.wrapS = THREE.RepeatWrapping;
-      fTex.wrapT = THREE.RepeatWrapping;
-      fTex.repeat.set(8, 8);
-      fTex.userData = { isSharedTexture: true };
-      return fTex;
+      const map = new THREE.CanvasTexture(fc);
+      map.wrapS = map.wrapT = THREE.RepeatWrapping;
+      map.repeat.set(8, 8);
+      map.userData = { isSharedTexture: true };
+
+      const roughnessMap = new THREE.CanvasTexture(rc);
+      roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+      roughnessMap.repeat.set(8, 8);
+      roughnessMap.userData = { isSharedTexture: true };
+
+      const bumpMap = new THREE.CanvasTexture(bc);
+      bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+      bumpMap.repeat.set(8, 8);
+      bumpMap.userData = { isSharedTexture: true };
+
+      return { map, roughnessMap, bumpMap };
     }
 
-    // Procedural Under-Table Woven Rug / Carpet Texture
-    function createCarpetTexture(thm) {
+    const floorPBR = createFloorPBRTextures(theme);
+    const floorTex = floorPBR.map;
+
+    // Procedural Under-Table Woven Rug / Carpet PBR Multi-Map Generator
+    function createCarpetPBRTextures(thm) {
       const cc = document.createElement('canvas');
-      cc.width = 512;
-      cc.height = 512;
+      cc.width = 512; cc.height = 512;
       const g = cc.getContext('2d');
 
+      const rc = document.createElement('canvas');
+      rc.width = 512; rc.height = 512;
+      const rg = rc.getContext('2d');
+      rg.fillStyle = '#cccccc'; // matte textile
+      rg.fillRect(0, 0, 512, 512);
+
+      const bc = document.createElement('canvas');
+      bc.width = 512; bc.height = 512;
+      const bg = bc.getContext('2d');
+      bg.fillStyle = '#808080';
+      bg.fillRect(0, 0, 512, 512);
+
+      // High-frequency tactile fabric pile / weave relief
+      bg.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      for (let w = 0; w < 512; w += 4) {
+        bg.fillRect(w, 0, 2, 512);
+        bg.fillRect(0, w, 512, 2);
+      }
+
       if (thm === 'wood') {
-        // Woven rustic kilim rug with geometric diamond patterns
-        g.fillStyle = '#6b2f1e'; // terracotta
+        g.fillStyle = '#6b2f1e';
         g.fillRect(0, 0, 512, 512);
-        g.strokeStyle = '#c48733'; // ochre gold
+        g.strokeStyle = '#c48733';
         g.lineWidth = 12;
         g.strokeRect(16, 16, 480, 480);
         g.strokeStyle = '#2b170e';
@@ -332,10 +536,7 @@
           for (let dy = 128; dy <= 384; dy += 128) {
             g.fillStyle = '#c48733';
             g.beginPath();
-            g.moveTo(dx, dy - 40);
-            g.lineTo(dx + 40, dy);
-            g.lineTo(dx, dy + 40);
-            g.lineTo(dx - 40, dy);
+            g.moveTo(dx, dy - 40); g.lineTo(dx + 40, dy); g.lineTo(dx, dy + 40); g.lineTo(dx - 40, dy);
             g.closePath();
             g.fill();
             g.fillStyle = '#2b170e';
@@ -345,13 +546,12 @@
           }
         }
       } else if (thm === 'marble') {
-        // Royal Neoclassical tapestry carpet (midnight blue, silver grey, gold acanthus border)
-        g.fillStyle = '#1a2233'; // midnight navy
+        g.fillStyle = '#1a2233';
         g.fillRect(0, 0, 512, 512);
-        g.strokeStyle = '#c5a059'; // platinum gold
+        g.strokeStyle = '#c5a059';
         g.lineWidth = 14;
         g.strokeRect(18, 18, 476, 476);
-        g.strokeStyle = '#8fa3bf'; // soft silver
+        g.strokeStyle = '#8fa3bf';
         g.lineWidth = 4;
         g.strokeRect(30, 30, 452, 452);
         g.fillStyle = '#242f44';
@@ -372,7 +572,6 @@
           g.stroke();
         }
       } else if (thm === 'neon') {
-        // Cyberpunk holo-arena battle pad (carbon fiber, hexagonal grid, glowing cyan/magenta border)
         g.fillStyle = '#090d16';
         g.fillRect(0, 0, 512, 512);
         g.strokeStyle = '#00f0ff';
@@ -401,11 +600,11 @@
         });
       } else {
         // Classic: Regal Persian/Oriental carpet (deep burgundy/crimson, ornate gold/navy border)
-        g.fillStyle = '#541219'; // deep crimson
+        g.fillStyle = '#541219';
         g.fillRect(0, 0, 512, 512);
-        g.fillStyle = '#162032'; // dark navy frame
+        g.fillStyle = '#162032';
         g.fillRect(16, 16, 480, 480);
-        g.fillStyle = '#64161f'; // inner field
+        g.fillStyle = '#64161f';
         g.fillRect(48, 48, 416, 416);
         g.strokeStyle = '#d4af37';
         g.lineWidth = 5;
@@ -438,22 +637,43 @@
         });
       }
 
-      const cTex = new THREE.CanvasTexture(cc);
-      cTex.wrapS = THREE.ClampToEdgeWrapping;
-      cTex.wrapT = THREE.ClampToEdgeWrapping;
-      cTex.userData = { isSharedTexture: true };
-      return cTex;
+      const map = new THREE.CanvasTexture(cc);
+      map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping;
+      map.userData = { isSharedTexture: true };
+
+      const roughnessMap = new THREE.CanvasTexture(rc);
+      roughnessMap.wrapS = roughnessMap.wrapT = THREE.ClampToEdgeWrapping;
+      roughnessMap.userData = { isSharedTexture: true };
+
+      const bumpMap = new THREE.CanvasTexture(bc);
+      bumpMap.wrapS = bumpMap.wrapT = THREE.ClampToEdgeWrapping;
+      bumpMap.userData = { isSharedTexture: true };
+
+      return { map, roughnessMap, bumpMap };
     }
 
-    // Procedural Room Wall Texture (Wainscoting Panels & Wallpaper / Masonry)
-    function createWallTexture(thm) {
+    const carpetPBR = createCarpetPBRTextures(theme);
+    const carpetTex = carpetPBR.map;
+
+    // Procedural Room Wall PBR Multi-Map Generator
+    function createWallPBRTextures(thm) {
       const wc = document.createElement('canvas');
-      wc.width = 512;
-      wc.height = 512;
+      wc.width = 512; wc.height = 512;
       const g = wc.getContext('2d');
 
+      const rc = document.createElement('canvas');
+      rc.width = 512; rc.height = 512;
+      const rg = rc.getContext('2d');
+      rg.fillStyle = '#888888';
+      rg.fillRect(0, 0, 512, 512);
+
+      const bc = document.createElement('canvas');
+      bc.width = 512; bc.height = 512;
+      const bg = bc.getContext('2d');
+      bg.fillStyle = '#808080';
+      bg.fillRect(0, 0, 512, 512);
+
       if (thm === 'wood') {
-        // Warm cedar horizontal tongue-and-groove wood planks
         g.fillStyle = '#482a1a';
         g.fillRect(0, 0, 512, 512);
         const numPlanks = 16;
@@ -464,24 +684,25 @@
           g.fillRect(0, i * pH, 512, pH - 2);
           g.fillStyle = 'rgba(20, 10, 5, 0.15)';
           g.fillRect(0, i * pH + 8, 512, 1.5);
+          bg.fillStyle = '#222222';
+          bg.fillRect(0, (i + 1) * pH - 2, 512, 2);
         }
       } else if (thm === 'marble') {
-        // Classical ashlar limestone blocks with soft stone texture
         g.fillStyle = '#d8dce2';
         g.fillRect(0, 0, 512, 512);
         g.strokeStyle = 'rgba(90, 105, 125, 0.35)';
         g.lineWidth = 2;
+        bg.strokeStyle = '#333333';
+        bg.lineWidth = 2;
         const bH = 64;
         for (let r = 0; r < 8; r++) {
           const y = r * bH;
-          g.beginPath();
-          g.moveTo(0, y); g.lineTo(512, y);
-          g.stroke();
+          g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke();
+          bg.beginPath(); bg.moveTo(0, y); bg.lineTo(512, y); bg.stroke();
           const shift = (r % 2) * 128;
           for (let x = shift; x <= 512; x += 256) {
-            g.beginPath();
-            g.moveTo(x, y); g.lineTo(x, y + bH);
-            g.stroke();
+            g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + bH); g.stroke();
+            bg.beginPath(); bg.moveTo(x, y); bg.lineTo(x, y + bH); bg.stroke();
           }
         }
         g.fillStyle = '#b8c0cc';
@@ -490,7 +711,6 @@
         g.lineWidth = 4;
         g.strokeRect(10, 394, 492, 108);
       } else if (thm === 'neon') {
-        // Cyberpunk dark composite metal wall panels with subtle conduits
         g.fillStyle = '#080a12';
         g.fillRect(0, 0, 512, 512);
         g.strokeStyle = '#141c2e';
@@ -521,6 +741,8 @@
         g.fillRect(0, 300, 512, 6);
         g.fillStyle = '#261b14';
         g.fillRect(0, 308, 512, 204);
+        rg.fillStyle = '#555555'; // wainscot satin
+        rg.fillRect(0, 308, 512, 204);
         for (let p = 0; p < 2; p++) {
           const px = 20 + p * 246;
           g.fillStyle = '#1e140d';
@@ -528,23 +750,53 @@
           g.strokeStyle = '#472b19';
           g.lineWidth = 3;
           g.strokeRect(px + 4, 328, 218, 164);
+          bg.strokeStyle = '#aaaaaa';
+          bg.lineWidth = 3;
+          bg.strokeRect(px + 4, 328, 218, 164);
         }
       }
 
-      const wTex = new THREE.CanvasTexture(wc);
-      wTex.wrapS = THREE.RepeatWrapping;
-      wTex.wrapT = THREE.RepeatWrapping;
-      wTex.repeat.set(4, 1);
-      wTex.userData = { isSharedTexture: true };
-      return wTex;
+      const map = new THREE.CanvasTexture(wc);
+      map.wrapS = THREE.RepeatWrapping;
+      map.wrapT = THREE.RepeatWrapping;
+      map.repeat.set(4, 1);
+      map.userData = { isSharedTexture: true };
+
+      const roughnessMap = new THREE.CanvasTexture(rc);
+      roughnessMap.wrapS = THREE.RepeatWrapping;
+      roughnessMap.wrapT = THREE.RepeatWrapping;
+      roughnessMap.repeat.set(4, 1);
+      roughnessMap.userData = { isSharedTexture: true };
+
+      const bumpMap = new THREE.CanvasTexture(bc);
+      bumpMap.wrapS = THREE.RepeatWrapping;
+      bumpMap.wrapT = THREE.RepeatWrapping;
+      bumpMap.repeat.set(4, 1);
+      bumpMap.userData = { isSharedTexture: true };
+
+      return { map, roughnessMap, bumpMap };
     }
 
-    // Procedural Realistic Tabletop Texture
-    function createTableTexture(thm) {
+    const wallPBR = createWallPBRTextures(theme);
+    const wallTex = wallPBR.map;
+
+    // Procedural Realistic Tabletop PBR Multi-Map Generator
+    function createTablePBRTextures(thm) {
       const tc = document.createElement('canvas');
-      tc.width = 512;
-      tc.height = 512;
+      tc.width = 512; tc.height = 512;
       const g = tc.getContext('2d');
+
+      const rc = document.createElement('canvas');
+      rc.width = 512; rc.height = 512;
+      const rg = rc.getContext('2d');
+      rg.fillStyle = '#484848';
+      rg.fillRect(0, 0, 512, 512);
+
+      const bc = document.createElement('canvas');
+      bc.width = 512; bc.height = 512;
+      const bg = bc.getContext('2d');
+      bg.fillStyle = '#808080';
+      bg.fillRect(0, 0, 512, 512);
 
       if (thm === 'wood') {
         g.fillStyle = '#4c2816';
@@ -552,6 +804,7 @@
         g.fillStyle = 'rgba(20, 10, 5, 0.18)';
         for (let i = 0; i < 40; i++) {
           g.fillRect(0, i * 13, 512, 4);
+          bg.fillRect(0, i * 13, 512, 2);
         }
         g.strokeStyle = 'rgba(255, 200, 150, 0.08)';
         g.lineWidth = 2;
@@ -565,6 +818,8 @@
         g.fillRect(0, 0, 512, 512);
         g.strokeStyle = 'rgba(220, 230, 245, 0.22)';
         g.lineWidth = 1.5;
+        rg.fillStyle = '#242424';
+        rg.fillRect(0, 0, 512, 512);
         for (let v = 0; v < 5; v++) {
           g.beginPath();
           let x = (v * 100) % 512;
@@ -592,16 +847,25 @@
         g.fillStyle = 'rgba(0, 0, 0, 0.22)';
         for (let i = 0; i < 512; i += 8) {
           g.fillRect(0, i, 512, 3);
+          bg.fillRect(0, i, 512, 2);
         }
         g.strokeStyle = 'rgba(80, 45, 25, 0.15)';
         g.lineWidth = 2;
         g.strokeRect(8, 8, 496, 496);
       }
 
-      const tTex = new THREE.CanvasTexture(tc);
-      tTex.userData = { isSharedTexture: true };
-      return tTex;
+      const map = new THREE.CanvasTexture(tc);
+      map.userData = { isSharedTexture: true };
+      const roughnessMap = new THREE.CanvasTexture(rc);
+      roughnessMap.userData = { isSharedTexture: true };
+      const bumpMap = new THREE.CanvasTexture(bc);
+      bumpMap.userData = { isSharedTexture: true };
+
+      return { map, roughnessMap, bumpMap };
     }
+
+    const tablePBR = createTablePBRTextures(theme);
+    const tableTex = tablePBR.map;
 
     // Procedural 3D Chess Clock Dial Texture
     function createClockDialTexture() {
@@ -667,7 +931,7 @@
       return cdTex;
     }
 
-    // Procedural Classical Painting Texture for Study Wall Decor
+    // Procedural Classical Painting Texture for Study Wall Decor (Rich Chiaroscuro Oil Paintings)
     function createPaintingTexture(idx) {
       const pc = document.createElement('canvas');
       pc.width = 512;
@@ -675,48 +939,81 @@
       const g = pc.getContext('2d');
 
       if (idx === 0) {
+        // Dramatic Sunset Alpine Valley & Lake Reflection
         const grad = g.createLinearGradient(0, 0, 0, 340);
-        grad.addColorStop(0, '#f97316');
-        grad.addColorStop(0.35, '#fbbf24');
-        grad.addColorStop(0.6, '#3b82f6');
-        grad.addColorStop(1, '#1e293b');
+        grad.addColorStop(0, '#e11d48');
+        grad.addColorStop(0.28, '#f59e0b');
+        grad.addColorStop(0.55, '#38bdf8');
+        grad.addColorStop(0.85, '#0f172a');
+        grad.addColorStop(1, '#020617');
         g.fillStyle = grad;
         g.fillRect(0, 0, 512, 340);
-        g.fillStyle = '#334155';
+
+        // Distant majestic peaks
+        g.fillStyle = '#1e293b';
         g.beginPath();
-        g.moveTo(0, 220);
-        g.lineTo(120, 110);
-        g.lineTo(240, 220);
-        g.lineTo(360, 90);
-        g.lineTo(512, 230);
+        g.moveTo(0, 210);
+        g.lineTo(100, 100);
+        g.lineTo(210, 200);
+        g.lineTo(320, 80);
+        g.lineTo(440, 190);
+        g.lineTo(512, 140);
         g.lineTo(512, 340);
         g.lineTo(0, 340);
         g.closePath();
         g.fill();
-        g.fillStyle = '#1e293b';
-        g.fillRect(0, 220, 512, 120);
-        g.fillStyle = 'rgba(251, 191, 36, 0.4)';
-        g.fillRect(160, 220, 160, 120);
+
+        // Foreground dark pine ridges
+        g.fillStyle = '#0f172a';
+        g.beginPath();
+        g.moveTo(0, 260);
+        g.lineTo(150, 190);
+        g.lineTo(300, 270);
+        g.lineTo(512, 210);
+        g.lineTo(512, 340);
+        g.lineTo(0, 340);
+        g.closePath();
+        g.fill();
+
+        // Lake water mirror reflection
+        g.fillStyle = '#090d16';
+        g.fillRect(0, 230, 512, 110);
+        const lakeGlow = g.createLinearGradient(0, 230, 0, 340);
+        lakeGlow.addColorStop(0, 'rgba(245, 158, 11, 0.45)');
+        lakeGlow.addColorStop(0.6, 'rgba(225, 29, 72, 0.2)');
+        lakeGlow.addColorStop(1, 'rgba(15, 23, 42, 0)');
+        g.fillStyle = lakeGlow;
+        g.fillRect(140, 230, 180, 110);
       } else {
-        const grad = g.createLinearGradient(0, 0, 512, 340);
-        grad.addColorStop(0, '#1c1917');
-        grad.addColorStop(0.5, '#44281d');
+        // Classical Grandmaster's Study Portrait
+        const grad = g.createRadialGradient(256, 150, 20, 256, 170, 260);
+        grad.addColorStop(0, '#78350f');
+        grad.addColorStop(0.4, '#451a03');
+        grad.addColorStop(0.8, '#1c1917');
         grad.addColorStop(1, '#0c0a09');
         g.fillStyle = grad;
         g.fillRect(0, 0, 512, 340);
-        g.fillStyle = '#1e1b18';
+
+        // Dignified seated silhouette
+        g.fillStyle = '#171513';
         g.beginPath();
-        g.arc(256, 120, 50, 0, Math.PI * 2);
+        g.arc(256, 115, 48, 0, Math.PI * 2);
         g.fill();
         g.beginPath();
-        g.moveTo(170, 320);
-        g.lineTo(210, 170);
-        g.lineTo(302, 170);
-        g.lineTo(342, 320);
+        g.moveTo(160, 320);
+        g.lineTo(205, 160);
+        g.lineTo(307, 160);
+        g.lineTo(352, 320);
         g.closePath();
         g.fill();
-        g.fillStyle = '#f59e0b';
-        g.fillRect(250, 250, 12, 25);
+
+        // Warm candlelight glow on mahogany table with chess piece
+        g.fillStyle = '#fbbf24';
+        g.beginPath();
+        g.arc(320, 220, 8, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#d97706';
+        g.fillRect(240, 248, 16, 28);
       }
 
       const pTex = new THREE.CanvasTexture(pc);
@@ -724,10 +1021,6 @@
       return pTex;
     }
 
-    const floorTex = createFloorTexture(theme);
-    const carpetTex = createCarpetTexture(theme);
-    const wallTex = createWallTexture(theme);
-    const tableTex = createTableTexture(theme);
     const clockDialTex = createClockDialTexture();
     const paintingTex1 = createPaintingTexture(0);
     const paintingTex2 = createPaintingTexture(1);
@@ -738,12 +1031,26 @@
       frameColor,
       tableColor,
       lightTex,
+      lightRoughnessTex: lightPBR.roughnessMap,
+      lightBumpTex: lightPBR.bumpMap,
       darkTex,
+      darkRoughnessTex: darkPBR.roughnessMap,
+      darkBumpTex: darkPBR.bumpMap,
       frameTex,
+      frameRoughnessTex: framePBR.roughnessMap,
+      frameBumpTex: framePBR.bumpMap,
       floorTex,
+      floorRoughnessTex: floorPBR.roughnessMap,
+      floorBumpTex: floorPBR.bumpMap,
       carpetTex,
+      carpetRoughnessTex: carpetPBR.roughnessMap,
+      carpetBumpTex: carpetPBR.bumpMap,
       wallTex,
+      wallRoughnessTex: wallPBR.roughnessMap,
+      wallBumpTex: wallPBR.bumpMap,
       tableTex,
+      tableRoughnessTex: tablePBR.roughnessMap,
+      tableBumpTex: tablePBR.bumpMap,
       clockDialTex,
       paintingTex1,
       paintingTex2
@@ -1325,11 +1632,12 @@
       this.needsRender = true;
       if (THREE.ACESFilmicToneMapping) {
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.05;
+        this.renderer.toneMappingExposure = 1.12;
       }
       if (THREE.sRGBEncoding) {
         this.renderer.outputEncoding = THREE.sRGBEncoding;
       }
+      this.initEnvironmentMap();
 
       this.renderer.domElement.style.display = 'block';
       this.renderer.domElement.style.width = '100%';
@@ -1341,6 +1649,69 @@
       this.containerEl.innerHTML = '';
       this.containerEl.appendChild(this.renderer.domElement);
       this.updateCanvasRect();
+    }
+
+    /**
+     * Generates a procedural IBL environment map via THREE.PMREMGenerator and sets scene.environment
+     * Provides subtle natural reflections and ambient bounce to all PBR MeshStandard/MeshPhysical materials
+     */
+    initEnvironmentMap() {
+      if (!THREE.PMREMGenerator) return;
+      try {
+        const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        const envScene = new THREE.Scene();
+
+        // Dark ambient room enclosure
+        const roomBoxGeo = new THREE.BoxGeometry(12, 12, 12);
+        const roomBoxMat = new THREE.MeshBasicMaterial({
+          color: 0x1a1510,
+          side: THREE.BackSide
+        });
+        const roomBox = new THREE.Mesh(roomBoxGeo, roomBoxMat);
+        envScene.add(roomBox);
+
+        // Warm overhead chandelier / ceiling light panel
+        const ceilLightGeo = new THREE.PlaneGeometry(5, 5);
+        ceilLightGeo.rotateX(Math.PI / 2);
+        const ceilLightMat = new THREE.MeshBasicMaterial({ color: 0xfff0dd });
+        const ceilLight = new THREE.Mesh(ceilLightGeo, ceilLightMat);
+        ceilLight.position.set(0, 5.8, 0);
+        envScene.add(ceilLight);
+
+        // Soft warm side bounce panel
+        const sideGeo1 = new THREE.PlaneGeometry(4, 5);
+        const sideMat1 = new THREE.MeshBasicMaterial({ color: 0xff9944 });
+        const side1 = new THREE.Mesh(sideGeo1, sideMat1);
+        side1.position.set(-5.8, 1, 0);
+        side1.rotation.y = Math.PI / 2;
+        envScene.add(side1);
+
+        // Soft cool rim bounce panel
+        const sideGeo2 = new THREE.PlaneGeometry(4, 5);
+        const sideMat2 = new THREE.MeshBasicMaterial({ color: 0x5577aa });
+        const side2 = new THREE.Mesh(sideGeo2, sideMat2);
+        side2.position.set(5.8, 1, 0);
+        side2.rotation.y = -Math.PI / 2;
+        envScene.add(side2);
+
+        const renderTarget = pmremGenerator.fromScene(envScene, 0.04);
+        this.scene.environment = renderTarget.texture;
+        this.pmremEnvTex = renderTarget.texture;
+
+        pmremGenerator.dispose();
+        roomBoxGeo.dispose();
+        roomBoxMat.dispose();
+        ceilLightGeo.dispose();
+        ceilLightMat.dispose();
+        sideGeo1.dispose();
+        sideMat1.dispose();
+        sideGeo2.dispose();
+        sideMat2.dispose();
+      } catch (err) {
+        console.warn('ChessScene3D: PMREMGenerator environment map setup failed', err);
+      }
     }
 
     /**
@@ -1371,11 +1742,11 @@
       this.scene.add(this.lightsGroup);
 
       // Ambient Light (subtle fill to preserve 3D contrast & cylindrical self-shading)
-      this.ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
+      this.ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
       this.lightsGroup.add(this.ambientLight);
 
       // Hemisphere Light (sky/ground color contrast)
-      this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x1a1d24, 0.40);
+      this.hemiLight = new THREE.HemisphereLight(0xfff5ea, 0x181410, 0.45);
       this.hemiLight.position.set(0, 20, 0);
       this.lightsGroup.add(this.hemiLight);
 
@@ -1394,6 +1765,20 @@
       this.mainDirLight.shadow.bias = -0.0003;
       this.mainDirLight.shadow.normalBias = 0.02;
       this.lightsGroup.add(this.mainDirLight);
+
+      // Overhead Tournament Chandelier SpotLight with soft shadows
+      this.overheadSpotLight = new THREE.SpotLight(0xfff2e0, 1.25, 35, Math.PI / 3.2, 0.35, 1.2);
+      this.overheadSpotLight.position.set(0, 14.0, 0);
+      this.overheadSpotLight.target.position.set(0, 0, 0);
+      this.overheadSpotLight.castShadow = true;
+      this.overheadSpotLight.shadow.mapSize.width = 2048;
+      this.overheadSpotLight.shadow.mapSize.height = 2048;
+      this.overheadSpotLight.shadow.bias = -0.0002;
+      if (this.overheadSpotLight.shadow.radius !== undefined) {
+        this.overheadSpotLight.shadow.radius = 2.0;
+      }
+      this.lightsGroup.add(this.overheadSpotLight);
+      this.lightsGroup.add(this.overheadSpotLight.target);
 
       // Rim / Fill Directional Light (opposite side for 3D depth)
       this.rimDirLight = new THREE.DirectionalLight(0xddeeff, 0.55);
@@ -1422,16 +1807,30 @@
 
       const textures = generateThemeTextures(this.theme);
 
-      // Materials for squares - Matte surface (roughness: 0.85, metalness: 0.02) to eliminate specular glare
-      this.lightSquareMat = new THREE.MeshStandardMaterial({
+      // Materials for squares - Upgraded to MeshPhysicalMaterial with clearcoat and multi-map PBR
+      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+
+      this.lightSquareMat = new matClass({
         map: textures.lightTex,
-        roughness: 0.85,
-        metalness: 0.02
+        roughnessMap: textures.lightRoughnessTex,
+        bumpMap: textures.lightBumpTex,
+        bumpScale: 0.012,
+        roughness: 0.40,
+        metalness: 0.02,
+        clearcoat: 0.55,
+        clearcoatRoughness: 0.15,
+        envMapIntensity: 1.15
       });
-      this.darkSquareMat = new THREE.MeshStandardMaterial({
+      this.darkSquareMat = new matClass({
         map: textures.darkTex,
-        roughness: 0.85,
-        metalness: 0.02
+        roughnessMap: textures.darkRoughnessTex,
+        bumpMap: textures.darkBumpTex,
+        bumpScale: 0.012,
+        roughness: 0.40,
+        metalness: 0.02,
+        clearcoat: 0.55,
+        clearcoatRoughness: 0.15,
+        envMapIntensity: 1.15
       });
 
       // Individual 64 board squares: 1.0 width, 0.16 height, 1.0 depth at y = -0.08
@@ -1458,10 +1857,16 @@
       }
 
       // Board Frame / Border: Top face at y = -0.025 (25mm below square tops, zero Z-fighting)
-      this.frameMat = new THREE.MeshStandardMaterial({
+      this.frameMat = new matClass({
         map: textures.frameTex,
-        roughness: 0.5,
-        metalness: 0.08
+        roughnessMap: textures.frameRoughnessTex,
+        bumpMap: textures.frameBumpTex,
+        bumpScale: 0.018,
+        roughness: 0.45,
+        metalness: 0.05,
+        clearcoat: 0.55,
+        clearcoatRoughness: 0.15,
+        envMapIntensity: 1.15
       });
 
       // Outer frame base
@@ -1662,16 +2067,38 @@
       this.tableGroup.name = 'tableGroup';
       this.environmentGroup.add(this.tableGroup);
 
-      // Main Tabletop Mesh (BoxGeometry 16.0 x 0.50 x 13.6, flush at y = -0.345 beneath frameBaseMesh)
-      const tableGeo = new THREE.BoxGeometry(16.0, 0.50, 13.6);
-      this.tableMat = new THREE.MeshStandardMaterial({
+      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+
+      // Table Material with Multi-Channel PBR Maps (Color, Roughness, Bump, Clearcoat)
+      this.tableMat = new matClass({
         map: textures.tableTex,
+        roughnessMap: textures.tableRoughnessTex || null,
+        bumpMap: textures.tableBumpTex || null,
+        bumpScale: 0.02,
         color: new THREE.Color(textures.tableColor),
-        roughness: 0.55,
-        metalness: 0.08
+        roughness: this.theme === 'marble' ? 0.35 : 0.52,
+        metalness: 0.08,
+        clearcoat: this.theme === 'marble' ? 0.65 : 0.45,
+        clearcoatRoughness: 0.16
       });
+
+      // Main Tabletop Mesh (ExtrudeGeometry with Chamfered/Beveled Edge, flush at y = -0.345 beneath frameBaseMesh)
+      const tableShape = createRoundedRectShape(16.0, 13.6, 0.45);
+      const tableExtrudeSettings = {
+        steps: 1,
+        depth: 0.34,
+        bevelEnabled: true,
+        bevelThickness: 0.08,
+        bevelSize: 0.08,
+        bevelOffset: 0,
+        bevelSegments: 4
+      };
+      const tableGeo = new THREE.ExtrudeGeometry(tableShape, tableExtrudeSettings);
+      tableGeo.rotateX(Math.PI / 2);
+
       this.tableMesh = new THREE.Mesh(tableGeo, this.tableMat);
-      this.tableMesh.position.set(0, -0.595, 0);
+      // Offset so top surface aligns flush at y = -0.345
+      this.tableMesh.position.set(0, -0.425, 0);
       this.tableMesh.receiveShadow = true;
       this.tableMesh.castShadow = true;
       this.tableGroup.add(this.tableMesh);
@@ -1687,14 +2114,31 @@
       // Under-Table Apron Skirt
       const skirtGeo = new THREE.BoxGeometry(14.6, 0.60, 12.2);
       const skirtMesh = new THREE.Mesh(skirtGeo, this.tableMat);
-      skirtMesh.position.set(0, -0.92, 0);
+      skirtMesh.position.set(0, -1.145, 0);
       skirtMesh.receiveShadow = true;
       skirtMesh.castShadow = true;
       this.tableGroup.add(skirtMesh);
 
-      // 4 Turned & Tapered Table Legs (reaching from apron down to floor at y = -6.8)
-      const legGeo = new THREE.CylinderGeometry(0.38, 0.24, 5.95, 16);
-      const footGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 16);
+      // Decorative moulded beading along bottom edge of apron skirt
+      const beadGeoX = new THREE.BoxGeometry(14.8, 0.08, 0.12);
+      const beadGeoZ = new THREE.BoxGeometry(0.12, 0.08, 12.4);
+      [-6.12, 6.12].forEach(bz => {
+        const bead = new THREE.Mesh(beadGeoX, this.tableMat);
+        bead.position.set(0, -1.41, bz);
+        bead.receiveShadow = true;
+        this.tableGroup.add(bead);
+      });
+      [-7.32, 7.32].forEach(bx => {
+        const bead = new THREE.Mesh(beadGeoZ, this.tableMat);
+        bead.position.set(bx, -1.41, 0);
+        bead.receiveShadow = true;
+        this.tableGroup.add(bead);
+      });
+
+      // 4 Turned & Tapered Table Legs (LatheGeometry reaching from apron down to floor at y = -6.8)
+      const legPts = createTurnedLegPoints(5.95);
+      const legGeo = new THREE.LatheGeometry(legPts, 24);
+      const footGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.12, 24);
       const legPositions = [
         [-6.6, 5.4],
         [6.6, 5.4],
@@ -1704,7 +2148,7 @@
 
       legPositions.forEach(([lx, lz]) => {
         const tableLeg = new THREE.Mesh(legGeo, this.tableMat);
-        tableLeg.position.set(lx, -3.825, lz);
+        tableLeg.position.set(lx, -0.85, lz);
         tableLeg.receiveShadow = true;
         tableLeg.castShadow = true;
         this.tableGroup.add(tableLeg);
@@ -1721,7 +2165,9 @@
     }
 
     /**
-     * Builds decorative procedural 3D analog chess clock on the table side (x = -5.8, y = -0.12, z = 0)
+     * Builds decorative procedural 3D analog chess clock on the table side (x = -5.8, y = -0.12, z = 0):
+     * ExtrudeGeometry casing with beveled profile, dual sunken dials, RingGeometry brass bezels,
+     * protective MeshPhysicalMaterial glass covers, and metallic rocker/plunger buttons.
      */
     buildChessClock(textures) {
       this.clockGroup = new THREE.Group();
@@ -1729,12 +2175,28 @@
       this.clockGroup.position.set(-5.8, -0.12, 0);
       this.tableGroup.add(this.clockGroup);
 
-      // Wooden / Matte casing body
-      const bodyGeo = new THREE.BoxGeometry(1.0, 0.45, 2.2);
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: this.theme === 'neon' ? 0x121726 : 0x3d2214,
-        roughness: 0.5,
-        metalness: 0.15
+      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+
+      // Casing body with ExtrudeGeometry and beveled edges
+      const clockShape = createRoundedRectShape(1.0, 2.2, 0.12);
+      const clockExtrudeSettings = {
+        steps: 1,
+        depth: 0.38,
+        bevelEnabled: true,
+        bevelThickness: 0.04,
+        bevelSize: 0.04,
+        bevelSegments: 3
+      };
+      const bodyGeo = new THREE.ExtrudeGeometry(clockShape, clockExtrudeSettings);
+      bodyGeo.rotateX(Math.PI / 2);
+      bodyGeo.center();
+
+      const bodyMat = new matClass({
+        color: this.theme === 'neon' ? 0x121726 : (this.theme === 'wood' ? 0x422212 : 0x361c10),
+        roughness: 0.45,
+        metalness: 0.15,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.2
       });
       const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
       bodyMesh.castShadow = true;
@@ -1742,11 +2204,11 @@
       this.clockGroup.add(bodyMesh);
 
       // Dual clock dials facing +X towards center board
-      const dialGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.04, 24);
+      const dialGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.03, 32);
       dialGeo.rotateZ(Math.PI / 2);
       const dialMat = new THREE.MeshBasicMaterial({ map: textures.clockDialTex });
 
-      // White dial (z = +0.55) & Black dial (z = -0.55)
+      // Sunken dials: White dial (z = +0.55) & Black dial (z = -0.55)
       const dialWhite = new THREE.Mesh(dialGeo, dialMat);
       dialWhite.position.set(0.50, 0, 0.55);
       this.clockGroup.add(dialWhite);
@@ -1755,12 +2217,54 @@
       dialBlack.position.set(0.50, 0, -0.55);
       this.clockGroup.add(dialBlack);
 
-      // 2 Brass Push Plungers on top
-      const plungerGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.14, 12);
-      const plungerMat = new THREE.MeshStandardMaterial({
-        color: 0xd4af37, // brass / gold
-        roughness: 0.25,
-        metalness: 0.85
+      // RingGeometry Brass Bezels framing the dials
+      const bezelGeo = new THREE.RingGeometry(0.25, 0.32, 32);
+      bezelGeo.rotateY(Math.PI / 2);
+      const bezelMat = new matClass({
+        color: 0xd4af37,
+        roughness: 0.22,
+        metalness: 0.88,
+        clearcoat: 0.8,
+        clearcoatRoughness: 0.1
+      });
+
+      const bezelWhite = new THREE.Mesh(bezelGeo, bezelMat);
+      bezelWhite.position.set(0.515, 0, 0.55);
+      this.clockGroup.add(bezelWhite);
+
+      const bezelBlack = new THREE.Mesh(bezelGeo, bezelMat);
+      bezelBlack.position.set(0.515, 0, -0.55);
+      this.clockGroup.add(bezelBlack);
+
+      // Protective Glass Covers in front of dials (MeshPhysicalMaterial with clearcoat & transparency)
+      const glassGeo = new THREE.CircleGeometry(0.27, 32);
+      glassGeo.rotateY(Math.PI / 2);
+      const glassMat = new matClass({
+        roughness: 0.04,
+        metalness: 0.0,
+        transmission: 0.88,
+        opacity: 0.25,
+        transparent: true,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.04,
+        reflectivity: 0.95
+      });
+
+      const glassWhite = new THREE.Mesh(glassGeo, glassMat);
+      glassWhite.position.set(0.52, 0, 0.55);
+      this.clockGroup.add(glassWhite);
+
+      const glassBlack = new THREE.Mesh(glassGeo, glassMat);
+      glassBlack.position.set(0.52, 0, -0.55);
+      this.clockGroup.add(glassBlack);
+
+      // Metallic Brass Plungers & Tilted Rocker Bar on top
+      const plungerGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.14, 16);
+      const plungerMat = new matClass({
+        color: 0xd4af37,
+        roughness: 0.20,
+        metalness: 0.90,
+        clearcoat: 0.6
       });
 
       const plungerWhite = new THREE.Mesh(plungerGeo, plungerMat);
@@ -1768,17 +2272,28 @@
       this.clockGroup.add(plungerWhite);
 
       const plungerBlack = new THREE.Mesh(plungerGeo, plungerMat);
-      plungerBlack.position.set(0, 0.31, -0.55);
+      plungerBlack.position.set(0, 0.32, -0.55);
       this.clockGroup.add(plungerBlack);
+
+      // Metallic Rocker connecting lever bar
+      const leverGeo = new THREE.BoxGeometry(0.08, 0.04, 1.15);
+      const leverMesh = new THREE.Mesh(leverGeo, plungerMat);
+      leverMesh.position.set(0, 0.25, 0);
+      leverMesh.rotation.x = -0.06;
+      this.clockGroup.add(leverMesh);
     }
 
     /**
-     * Builds two procedural player armchairs on White (z = +9.2, facing -Z) and Black (z = -9.2, facing +Z) sides
+     * Builds two procedural player armchairs on White (z = +9.2, facing -Z) and Black (z = -9.2, facing +Z) sides:
+     * ExtrudeGeometry beveled seat & backrest cushions with tufted buttons, LatheGeometry turned legs,
+     * and curved armrests on turned spindle supports.
      */
     buildChairs(textures) {
       this.chairsGroup = new THREE.Group();
       this.chairsGroup.name = 'playerChairs';
       this.environmentGroup.add(this.chairsGroup);
+
+      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
 
       let woodCol = 0x2e1910;
       let cushionCol = 0x54141b;
@@ -1793,27 +2308,60 @@
         cushionCol = 0x141a29; // dark cyber
       }
 
-      this.chairWoodMat = new THREE.MeshStandardMaterial({
+      this.chairWoodMat = new matClass({
         color: woodCol,
-        roughness: 0.55,
-        metalness: 0.08
+        roughness: 0.52,
+        metalness: 0.08,
+        clearcoat: 0.45,
+        clearcoatRoughness: 0.18
       });
-      this.chairCushionMat = new THREE.MeshStandardMaterial({
+      this.chairCushionMat = new matClass({
         color: cushionCol,
         roughness: 0.65,
-        metalness: 0.04
+        metalness: 0.04,
+        clearcoat: 0.30,
+        clearcoatRoughness: 0.30
       });
 
       const createArmchair = () => {
         const chair = new THREE.Group();
 
-        // Cushioned Seat at y = -3.8
-        const seatGeo = new THREE.BoxGeometry(4.2, 0.50, 4.0);
+        // Cushioned Seat via ExtrudeGeometry with Beveled Chamfer
+        const seatShape = createRoundedRectShape(4.2, 4.0, 0.35);
+        const seatExtrude = {
+          steps: 1,
+          depth: 0.38,
+          bevelEnabled: true,
+          bevelThickness: 0.09,
+          bevelSize: 0.09,
+          bevelSegments: 4
+        };
+        const seatGeo = new THREE.ExtrudeGeometry(seatShape, seatExtrude);
+        seatGeo.rotateX(Math.PI / 2);
+        seatGeo.center();
+
         const seatMesh = new THREE.Mesh(seatGeo, this.chairCushionMat);
         seatMesh.position.set(0, -3.8, 0);
         seatMesh.receiveShadow = true;
         seatMesh.castShadow = true;
         chair.add(seatMesh);
+
+        // Tufted Button Indentations on Seat Cushion
+        const buttonGeo = new THREE.SphereGeometry(0.07, 12, 10);
+        buttonGeo.scale(1.0, 0.4, 1.0);
+        const buttonMat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(cushionCol).multiplyScalar(0.72),
+          roughness: 0.75
+        });
+        const seatTuftOffsets = [
+          [-1.1, -0.9], [0, -0.9], [1.1, -0.9],
+          [-1.1, 0.9], [0, 0.9], [1.1, 0.9]
+        ];
+        seatTuftOffsets.forEach(([bx, bz]) => {
+          const btn = new THREE.Mesh(buttonGeo, buttonMat);
+          btn.position.set(bx, -3.53, bz);
+          chair.add(btn);
+        });
 
         // Seat Frame Base
         const frameGeo = new THREE.BoxGeometry(4.2, 0.24, 4.0);
@@ -1823,8 +2371,9 @@
         frameMesh.castShadow = true;
         chair.add(frameMesh);
 
-        // 4 Chair Legs down to floor at y = -6.8 (height = 2.65, center = -5.475)
-        const chairLegGeo = new THREE.CylinderGeometry(0.14, 0.10, 2.65, 12);
+        // 4 Turned Chair Legs (LatheGeometry reaching down to floor at y = -6.8)
+        const chairLegPts = createTurnedChairLegPoints(2.65);
+        const chairLegGeo = new THREE.LatheGeometry(chairLegPts, 16);
         const chairLegOffsets = [
           [-1.8, 1.7],
           [1.8, 1.7],
@@ -1833,28 +2382,74 @@
         ];
         chairLegOffsets.forEach(([cx, cz]) => {
           const chairLeg = new THREE.Mesh(chairLegGeo, this.chairWoodMat);
-          chairLeg.position.set(cx, -5.475, cz);
+          chairLeg.position.set(cx, -4.15, cz);
           chairLeg.receiveShadow = true;
           chairLeg.castShadow = true;
           chair.add(chairLeg);
         });
 
-        // Supportive Backrest (rises from seat to y = 0.0)
-        const backrestGeo = new THREE.BoxGeometry(4.2, 3.8, 0.45);
-        const backrestMesh = new THREE.Mesh(backrestGeo, this.chairCushionMat);
+        // Supportive Backrest Cushion via ExtrudeGeometry with Bevel
+        const backShape = createRoundedRectShape(4.2, 3.8, 0.35);
+        const backExtrude = {
+          steps: 1,
+          depth: 0.36,
+          bevelEnabled: true,
+          bevelThickness: 0.08,
+          bevelSize: 0.08,
+          bevelSegments: 4
+        };
+        const backGeo = new THREE.ExtrudeGeometry(backShape, backExtrude);
+        backGeo.center();
+
+        const backrestMesh = new THREE.Mesh(backGeo, this.chairCushionMat);
         backrestMesh.position.set(0, -1.9, -1.8);
         backrestMesh.receiveShadow = true;
         backrestMesh.castShadow = true;
         chair.add(backrestMesh);
 
-        // Armrests left and right
-        const armGeo = new THREE.BoxGeometry(0.40, 1.3, 3.4);
+        // Tufted Buttons on Backrest
+        const backTufts = [
+          [-1.1, -1.3], [1.1, -1.3],
+          [-1.1, -1.9], [1.1, -1.9],
+          [-1.1, -2.5], [1.1, -2.5]
+        ];
+        backTufts.forEach(([tx, ty]) => {
+          const btn = new THREE.Mesh(buttonGeo, buttonMat);
+          btn.rotation.x = Math.PI / 2;
+          btn.position.set(tx, ty, -1.54);
+          chair.add(btn);
+        });
+
+        // Curved Armrests on Turned Spindle Supports
+        const armRailShape = createRoundedRectShape(0.38, 3.4, 0.08);
+        const armRailGeo = new THREE.ExtrudeGeometry(armRailShape, {
+          steps: 1,
+          depth: 0.14,
+          bevelEnabled: true,
+          bevelThickness: 0.03,
+          bevelSize: 0.03,
+          bevelSegments: 2
+        });
+        armRailGeo.rotateX(Math.PI / 2);
+        armRailGeo.center();
+
+        const spindlePts = createTurnedChairLegPoints(1.15);
+        const spindleGeo = new THREE.LatheGeometry(spindlePts, 12);
+
         [-2.0, 2.0].forEach(ax => {
-          const armMesh = new THREE.Mesh(armGeo, this.chairWoodMat);
-          armMesh.position.set(ax, -2.85, 0);
-          armMesh.receiveShadow = true;
-          armMesh.castShadow = true;
-          chair.add(armMesh);
+          const armRail = new THREE.Mesh(armRailGeo, this.chairWoodMat);
+          armRail.position.set(ax, -2.20, 0);
+          armRail.receiveShadow = true;
+          armRail.castShadow = true;
+          chair.add(armRail);
+
+          // 2 Turned Spindles supporting each armrest
+          [-1.2, 1.2].forEach(sz => {
+            const spindle = new THREE.Mesh(spindleGeo, this.chairWoodMat);
+            spindle.position.set(ax, -2.30, sz);
+            spindle.receiveShadow = true;
+            chair.add(spindle);
+          });
         });
 
         return chair;
@@ -1875,32 +2470,43 @@
 
     /**
      * Builds procedural 3D room interior:
-     * Repeating parquet/marble/timber/cyber floor at y = -6.8, under-table woven carpet at y = -6.78,
-     * 4 enclosing walls (width 68, height 22, center y = 4.2), baseboards, crown moulding, and ceiling at y = +15.2.
+     * Multi-channel PBR parquet/marble/timber floor at y = -6.8, tactile woven carpet at y = -6.78,
+     * 4 enclosing walls with 3D raised wainscoting boiserie frame mouldings, baseboards,
+     * 4 decorative brass wall sconces with warm PointLights, and ceiling at y = +15.2.
      */
     buildRoom(textures) {
       this.roomGroup = new THREE.Group();
       this.roomGroup.name = 'roomGroup';
       this.environmentGroup.add(this.roomGroup);
 
-      // Floor at y = -6.8 (68 x 68)
+      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
+
+      // Floor at y = -6.8 (68 x 68) with Multi-Channel PBR Maps
       const floorGeo = new THREE.PlaneGeometry(68.0, 68.0);
       floorGeo.rotateX(-Math.PI / 2);
-      this.floorMat = new THREE.MeshStandardMaterial({
+      this.floorMat = new matClass({
         map: textures.floorTex,
-        roughness: 0.65,
-        metalness: 0.08
+        roughnessMap: textures.floorRoughnessTex || null,
+        bumpMap: textures.floorBumpTex || null,
+        bumpScale: 0.02,
+        roughness: 0.58,
+        metalness: 0.08,
+        clearcoat: this.theme === 'marble' ? 0.70 : (this.theme === 'wood' ? 0.35 : 0.45),
+        clearcoatRoughness: 0.18
       });
       this.floorMesh = new THREE.Mesh(floorGeo, this.floorMat);
       this.floorMesh.position.set(0, -6.8, 0);
       this.floorMesh.receiveShadow = true;
       this.roomGroup.add(this.floorMesh);
 
-      // Under-Table Woven Rug / Carpet (22 x 0.04 x 19 at y = -6.78)
+      // Under-Table Woven Rug / Carpet (22 x 0.04 x 19 at y = -6.78) with High-Frequency Tactile Weave Bump
       const carpetGeo = new THREE.BoxGeometry(22.0, 0.04, 19.0);
-      this.carpetMat = new THREE.MeshStandardMaterial({
+      this.carpetMat = new matClass({
         map: textures.carpetTex,
-        roughness: 0.85,
+        roughnessMap: textures.carpetRoughnessTex || null,
+        bumpMap: textures.carpetBumpTex || null,
+        bumpScale: 0.035,
+        roughness: 0.90,
         metalness: 0.02
       });
       this.carpetMesh = new THREE.Mesh(carpetGeo, this.carpetMat);
@@ -1909,8 +2515,11 @@
       this.roomGroup.add(this.carpetMesh);
 
       // 4 Enclosing Walls (Width 68, Height 22, centered at y = 4.2)
-      this.wallMat = new THREE.MeshStandardMaterial({
+      this.wallMat = new matClass({
         map: textures.wallTex,
+        roughnessMap: textures.wallRoughnessTex || null,
+        bumpMap: textures.wallBumpTex || null,
+        bumpScale: 0.015,
         roughness: 0.85,
         metalness: 0.04
       });
@@ -1944,10 +2553,104 @@
       eastWall.receiveShadow = true;
       this.roomGroup.add(eastWall);
 
+      // 3D Raised Wainscoting Boiserie Frame Mouldings along lower walls (y = -4.2)
+      const boiserieMat = new matClass({
+        color: this.theme === 'neon' ? 0x0a0f1d : (this.theme === 'marble' ? 0xe2e6ed : 0x221710),
+        roughness: 0.60,
+        metalness: 0.08
+      });
+      const boiserieGeo = new THREE.BoxGeometry(8.0, 3.8, 0.12);
+
+      [-22, -11, 0, 11, 22].forEach(px => {
+        // North wall boiserie
+        const bpN = new THREE.Mesh(boiserieGeo, boiserieMat);
+        bpN.position.set(px, -4.2, -33.88);
+        bpN.receiveShadow = true;
+        this.roomGroup.add(bpN);
+
+        // South wall boiserie
+        const bpS = new THREE.Mesh(boiserieGeo, boiserieMat);
+        bpS.position.set(px, -4.2, 33.88);
+        bpS.receiveShadow = true;
+        this.roomGroup.add(bpS);
+      });
+
+      [-22, -11, 0, 11, 22].forEach(pz => {
+        // West wall boiserie
+        const bpW = new THREE.Mesh(boiserieGeo, boiserieMat);
+        bpW.position.set(-33.88, -4.2, pz);
+        bpW.rotation.y = Math.PI / 2;
+        bpW.receiveShadow = true;
+        this.roomGroup.add(bpW);
+
+        // East wall boiserie
+        const bpE = new THREE.Mesh(boiserieGeo, boiserieMat);
+        bpE.position.set(33.88, -4.2, pz);
+        bpE.rotation.y = -Math.PI / 2;
+        bpE.receiveShadow = true;
+        this.roomGroup.add(bpE);
+      });
+
+      // Chair Rail Moulding along walls at y = -2.1
+      const chairRailN = new THREE.Mesh(new THREE.BoxGeometry(68.0, 0.22, 0.22), boiserieMat);
+      chairRailN.position.set(0, -2.1, -33.85);
+      this.roomGroup.add(chairRailN);
+      const chairRailS = new THREE.Mesh(new THREE.BoxGeometry(68.0, 0.22, 0.22), boiserieMat);
+      chairRailS.position.set(0, -2.1, 33.85);
+      this.roomGroup.add(chairRailS);
+
+      // 4 Decorative Brass Wall Sconces with warm PointLights (North & South walls at y = 5.5)
+      const sconceBrassMat = new matClass({
+        color: 0xd4af37,
+        roughness: 0.25,
+        metalness: 0.85,
+        clearcoat: 0.7
+      });
+      const sconceShadeMat = new matClass({
+        color: 0xfffaed,
+        emissive: 0xffd180,
+        emissiveIntensity: 0.6,
+        roughness: 0.3
+      });
+
+      const addSconce = (sx, sy, sz, rotY) => {
+        const sconceGroup = new THREE.Group();
+        sconceGroup.position.set(sx, sy, sz);
+        sconceGroup.rotation.y = rotY;
+
+        // Brass Backplate
+        const bp = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.08, 16), sconceBrassMat);
+        bp.rotateX(Math.PI / 2);
+        sconceGroup.add(bp);
+
+        // Curved Brass Arm
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.7, 12), sconceBrassMat);
+        arm.position.set(0, 0.1, 0.35);
+        arm.rotateX(Math.PI / 3);
+        sconceGroup.add(arm);
+
+        // Frosted Glass Shade / Flame
+        const shade = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.55, 16), sconceShadeMat);
+        shade.position.set(0, 0.42, 0.55);
+        sconceGroup.add(shade);
+
+        // Warm Accent Point Light
+        const sconceLight = new THREE.PointLight(0xffb74d, 0.65, 16);
+        sconceLight.position.set(0, 0.55, 0.7);
+        sconceGroup.add(sconceLight);
+
+        this.roomGroup.add(sconceGroup);
+      };
+
+      addSconce(-16.0, 5.5, -33.8, 0);
+      addSconce(16.0, 5.5, -33.8, 0);
+      addSconce(-16.0, 5.5, 33.8, Math.PI);
+      addSconce(16.0, 5.5, 33.8, Math.PI);
+
       // Ceiling at y = +15.2 (facing -Y down into room)
       const ceilingGeo = new THREE.PlaneGeometry(68.0, 68.0);
       ceilingGeo.rotateX(Math.PI / 2);
-      const ceilingMat = new THREE.MeshStandardMaterial({
+      const ceilingMat = new matClass({
         color: this.theme === 'neon' ? 0x05070e : (this.theme === 'marble' ? 0xedf0f5 : 0x2d241e),
         roughness: 0.9,
         metalness: 0.02
@@ -1957,7 +2660,7 @@
       this.roomGroup.add(ceilingMesh);
 
       // Baseboard Plinth running along floor perimeter at y = -6.4
-      const baseboardMat = new THREE.MeshStandardMaterial({
+      const baseboardMat = new matClass({
         color: this.theme === 'neon' ? 0x080c16 : 0x1e150f,
         roughness: 0.6,
         metalness: 0.1
@@ -1978,8 +2681,9 @@
 
     /**
      * Builds theme-specific procedural 3D room decor on walls and perimeter:
-     * - 'classic': 2 wooden bookshelves with colorful book blocks + 2 framed classical oil paintings
-     * - 'wood': heavy timber ceiling beams + 2 bookshelves + stone fireplace with glowing hearth point light
+     * - 'classic': 2 hollow open bookcases with ExtrudeGeometry cornice moulding, 4 shelves,
+     *   varied books + tilted leaning books + 2 framed classical oil paintings with glass pane
+     * - 'wood': heavy timber ceiling beams + rustic open bookcase + stone fireplace with glowing hearth point light
      * - 'marble': 8 fluted classical Ionic marble columns with plinths & capitals
      * - 'neon': 8 glowing vertical neon light pillars (cyan & magenta) + overhead glowing neon halo ring
      */
@@ -1991,51 +2695,107 @@
       }
 
       const textures = generateThemeTextures(themeName);
+      const matClass = THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial;
 
       if (themeName === 'classic') {
-        // 1. Two wooden bookshelves with rows of procedural 3D book blocks
+        // 1. Two hollow open wooden bookshelves ("Шафа для книг") with cornice crown moulding & varied/tilted books
         const makeBookshelf = (bx, bz, rotY) => {
           const bsGroup = new THREE.Group();
           bsGroup.position.set(bx, 0, bz);
           bsGroup.rotation.y = rotY;
 
-          const shelfWoodMat = new THREE.MeshStandardMaterial({
+          const shelfWoodMat = new matClass({
             color: 0x2c170d,
-            roughness: 0.6,
-            metalness: 0.08
+            roughness: 0.58,
+            metalness: 0.08,
+            clearcoat: 0.35,
+            clearcoatRoughness: 0.20
           });
 
-          const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(8.0, 12.0, 1.6), shelfWoodMat);
-          frameMesh.position.set(0, -0.8, 0);
-          frameMesh.receiveShadow = true;
-          frameMesh.castShadow = true;
-          bsGroup.add(frameMesh);
+          // Upright Side Walls (Left & Right)
+          const sideGeo = new THREE.BoxGeometry(0.35, 12.0, 1.6);
+          const leftSide = new THREE.Mesh(sideGeo, shelfWoodMat);
+          leftSide.position.set(-3.82, -0.8, 0);
+          leftSide.receiveShadow = true;
+          leftSide.castShadow = true;
+          bsGroup.add(leftSide);
 
+          const rightSide = new THREE.Mesh(sideGeo, shelfWoodMat);
+          rightSide.position.set(3.82, -0.8, 0);
+          rightSide.receiveShadow = true;
+          rightSide.castShadow = true;
+          bsGroup.add(rightSide);
+
+          // Back Wall Panel
+          const backGeo = new THREE.BoxGeometry(7.6, 12.0, 0.15);
+          const backMesh = new THREE.Mesh(backGeo, shelfWoodMat);
+          backMesh.position.set(0, -0.8, -0.72);
+          backMesh.receiveShadow = true;
+          bsGroup.add(backMesh);
+
+          // Base Plinth
+          const plinthGeo = new THREE.BoxGeometry(8.2, 0.8, 1.8);
+          const plinthMesh = new THREE.Mesh(plinthGeo, shelfWoodMat);
+          plinthMesh.position.set(0, -6.4, 0);
+          plinthMesh.receiveShadow = true;
+          bsGroup.add(plinthMesh);
+
+          // Top Cornice Crown Moulding via ExtrudeGeometry
+          const corniceShape = createCorniceShape();
+          const corniceGeo = new THREE.ExtrudeGeometry(corniceShape, {
+            steps: 1,
+            depth: 8.4,
+            bevelEnabled: false
+          });
+          corniceGeo.rotateY(Math.PI / 2);
+          corniceGeo.center();
+          const corniceMesh = new THREE.Mesh(corniceGeo, shelfWoodMat);
+          corniceMesh.position.set(0, 5.3, 0);
+          corniceMesh.receiveShadow = true;
+          bsGroup.add(corniceMesh);
+
+          // 4 Horizontal Shelves
           const bookColors = [0x7f1d1d, 0x1e3a8a, 0x14532d, 0x78350f, 0x854d0e, 0x3f3f46, 0x581c87];
-          const shelfY = [-3.8, -0.8, 2.2];
+          const shelfY = [-4.6, -2.0, 0.6, 3.2];
 
           shelfY.forEach((sy, sIdx) => {
-            const board = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.18, 1.4), shelfWoodMat);
-            board.position.set(0, sy, 0.05);
+            const board = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.22, 1.4), shelfWoodMat);
+            board.position.set(0, sy, 0.02);
             board.receiveShadow = true;
             bsGroup.add(board);
 
+            // Fill shelves with varied books + leaning/tilted books
             let curX = -3.4;
             let bCount = 0;
-            while (curX < 3.2 && bCount < 24) {
+            while (curX < 3.1 && bCount < 22) {
               const bWidth = 0.22 + ((bCount * 7) % 5) * 0.035;
               const bHeight = 1.35 + ((bCount * 11) % 6) * 0.08;
-              const bMat = new THREE.MeshStandardMaterial({
+              const bMat = new matClass({
                 color: bookColors[(sIdx * 3 + bCount) % bookColors.length],
-                roughness: 0.7,
-                metalness: 0.05
+                roughness: 0.65,
+                metalness: 0.06,
+                clearcoat: 0.25
               });
+
               const bookMesh = new THREE.Mesh(new THREE.BoxGeometry(bWidth, bHeight, 1.1), bMat);
-              bookMesh.position.set(curX + bWidth / 2, sy + bHeight / 2 + 0.09, 0.05);
+
+              // Add a leaning book resting against upright at the end of shelves
+              if (sIdx % 2 === 0 && curX > 2.4 && bCount > 15) {
+                bookMesh.position.set(curX + bWidth / 2, sy + bHeight / 2 + 0.11, 0.05);
+                bookMesh.rotation.z = 0.28;
+                curX += bWidth + 0.35;
+              } else if (sIdx % 2 === 1 && curX < -2.8 && bCount === 0) {
+                bookMesh.position.set(curX + bWidth / 2 + 0.1, sy + bHeight / 2 + 0.11, 0.05);
+                bookMesh.rotation.z = -0.25;
+                curX += bWidth + 0.30;
+              } else {
+                bookMesh.position.set(curX + bWidth / 2, sy + bHeight / 2 + 0.11, 0.05);
+                curX += bWidth + 0.03;
+              }
+
               bookMesh.receiveShadow = true;
               bookMesh.castShadow = true;
               bsGroup.add(bookMesh);
-              curX += bWidth + 0.03;
               bCount++;
             }
           });
@@ -2046,28 +2806,50 @@
         this.decorGroup.add(makeBookshelf(-32.6, -8.0, Math.PI / 2));
         this.decorGroup.add(makeBookshelf(32.6, -8.0, -Math.PI / 2));
 
-        // 2. Framed Classical Oil Paintings with Gold Bevel Frames
+        // 2. Framed Classical Oil Paintings with Gold Moulded Frame & Protective Glass Layer
         const makeFramedPainting = (px, py, pz, rotY, tex) => {
           const paintGroup = new THREE.Group();
           paintGroup.position.set(px, py, pz);
           paintGroup.rotation.y = rotY;
 
-          const goldMat = new THREE.MeshStandardMaterial({
+          // Multi-layer Gold Moulded Frame
+          const goldMat = new matClass({
             color: 0xd4af37,
-            roughness: 0.3,
-            metalness: 0.85
+            roughness: 0.28,
+            metalness: 0.88,
+            clearcoat: 0.75,
+            clearcoatRoughness: 0.15
           });
-          const frame = new THREE.Mesh(new THREE.BoxGeometry(9.0, 6.0, 0.4), goldMat);
-          frame.castShadow = true;
-          paintGroup.add(frame);
+          const outerFrame = new THREE.Mesh(new THREE.BoxGeometry(9.2, 6.2, 0.4), goldMat);
+          outerFrame.castShadow = true;
+          paintGroup.add(outerFrame);
 
-          const canvasMat = new THREE.MeshStandardMaterial({
+          // Inner Linen Liner
+          const linerMat = new matClass({ color: 0x221a14, roughness: 0.8 });
+          const liner = new THREE.Mesh(new THREE.BoxGeometry(8.4, 5.4, 0.42), linerMat);
+          paintGroup.add(liner);
+
+          // Canvas with Classical Painting
+          const canvasMat = new matClass({
             map: tex,
-            roughness: 0.75,
+            roughness: 0.72,
             metalness: 0.02
           });
-          const canvasMesh = new THREE.Mesh(new THREE.BoxGeometry(8.2, 5.2, 0.45), canvasMat);
+          const canvasMesh = new THREE.Mesh(new THREE.BoxGeometry(8.0, 5.0, 0.44), canvasMat);
           paintGroup.add(canvasMesh);
+
+          // Protective Glass Pane in Front of Canvas
+          const glassMat = new matClass({
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.04,
+            opacity: 0.18,
+            transparent: true,
+            roughness: 0.05,
+            reflectivity: 0.90
+          });
+          const glassPane = new THREE.Mesh(new THREE.PlaneGeometry(8.0, 5.0), glassMat);
+          glassPane.position.set(0, 0, 0.23);
+          paintGroup.add(glassPane);
 
           return paintGroup;
         };
@@ -2077,10 +2859,11 @@
 
       } else if (themeName === 'wood') {
         // 1. Heavy Timber Ceiling Beams
-        const beamMat = new THREE.MeshStandardMaterial({
+        const beamMat = new matClass({
           color: 0x3d2012,
-          roughness: 0.7,
-          metalness: 0.05
+          roughness: 0.70,
+          metalness: 0.05,
+          clearcoat: 0.20
         });
         const beamGeo = new THREE.BoxGeometry(68.0, 1.2, 1.2);
         [-25, -15, -5, 5, 15, 25].forEach(bz => {
@@ -2091,25 +2874,28 @@
           this.decorGroup.add(beam);
         });
 
-        // 2. Rustic Bookshelf on East wall
-        const rusticShelfMat = new THREE.MeshStandardMaterial({
+        // 2. Rustic Bookshelf on East Wall with Books
+        const rusticShelfMat = new matClass({
           color: 0x482816,
           roughness: 0.65,
           metalness: 0.04
         });
+        const rusticGroup = new THREE.Group();
+        rusticGroup.position.set(32.6, -1.8, 0);
+        rusticGroup.rotation.y = -Math.PI / 2;
+
         const eastShelf = new THREE.Mesh(new THREE.BoxGeometry(8.0, 10.0, 1.8), rusticShelfMat);
-        eastShelf.position.set(32.6, -1.8, 0);
-        eastShelf.rotation.y = -Math.PI / 2;
         eastShelf.receiveShadow = true;
         eastShelf.castShadow = true;
-        this.decorGroup.add(eastShelf);
+        rusticGroup.add(eastShelf);
+        this.decorGroup.add(rusticGroup);
 
         // 3. Stone Fireplace on West Wall with Glowing Warm Hearth Point Light
         const fireplaceGroup = new THREE.Group();
         fireplaceGroup.position.set(-32.0, 0, 0);
         fireplaceGroup.rotation.y = Math.PI / 2;
 
-        const stoneMat = new THREE.MeshStandardMaterial({
+        const stoneMat = new matClass({
           color: 0x5a5652,
           roughness: 0.85,
           metalness: 0.05
@@ -2146,10 +2932,12 @@
 
       } else if (themeName === 'marble') {
         // 8 Fluted Classical Marble Ionic Columns with Plinths and Capitals
-        const columnMat = new THREE.MeshStandardMaterial({
+        const columnMat = new matClass({
           color: 0xedf0f5,
-          roughness: 0.35,
-          metalness: 0.1
+          roughness: 0.32,
+          metalness: 0.10,
+          clearcoat: 0.70,
+          clearcoatRoughness: 0.12
         });
         const columnShaftGeo = new THREE.CylinderGeometry(1.2, 1.2, 21.0, 24);
         const plinthGeo = new THREE.BoxGeometry(3.2, 1.0, 3.2);
@@ -2197,12 +2985,13 @@
         const pillarGeo = new THREE.CylinderGeometry(0.35, 0.35, 21.0, 16);
 
         pillarLocations.forEach(([px, pz, pCol]) => {
-          const pMat = new THREE.MeshStandardMaterial({
+          const pMat = new matClass({
             color: pCol,
             emissive: pCol,
             emissiveIntensity: 2.2,
             roughness: 0.2,
-            metalness: 0.8
+            metalness: 0.8,
+            clearcoat: 0.6
           });
           const pillar = new THREE.Mesh(pillarGeo, pMat);
           pillar.position.set(px, 4.2, pz);
@@ -2216,11 +3005,12 @@
         // 2. Overhead Glowing Neon Halo Ring
         const haloGeo = new THREE.TorusGeometry(14.0, 0.28, 16, 64);
         haloGeo.rotateX(Math.PI / 2);
-        const haloMat = new THREE.MeshStandardMaterial({
+        const haloMat = new matClass({
           color: 0x00f0ff,
           emissive: 0x00f0ff,
           emissiveIntensity: 2.5,
-          roughness: 0.2
+          roughness: 0.2,
+          clearcoat: 0.8
         });
         const haloMesh = new THREE.Mesh(haloGeo, haloMat);
         haloMesh.position.set(0, 13.5, 0);
@@ -2234,19 +3024,27 @@
     updateEnvironmentMaterials(textures, themeName) {
       if (this.tableMat) {
         this.tableMat.map = textures.tableTex;
+        if (textures.tableRoughnessTex) this.tableMat.roughnessMap = textures.tableRoughnessTex;
+        if (textures.tableBumpTex) this.tableMat.bumpMap = textures.tableBumpTex;
         this.tableMat.color.set(textures.tableColor);
         this.tableMat.needsUpdate = true;
       }
       if (this.floorMat) {
         this.floorMat.map = textures.floorTex;
+        if (textures.floorRoughnessTex) this.floorMat.roughnessMap = textures.floorRoughnessTex;
+        if (textures.floorBumpTex) this.floorMat.bumpMap = textures.floorBumpTex;
         this.floorMat.needsUpdate = true;
       }
       if (this.carpetMat) {
         this.carpetMat.map = textures.carpetTex;
+        if (textures.carpetRoughnessTex) this.carpetMat.roughnessMap = textures.carpetRoughnessTex;
+        if (textures.carpetBumpTex) this.carpetMat.bumpMap = textures.carpetBumpTex;
         this.carpetMat.needsUpdate = true;
       }
       if (this.wallMat) {
         this.wallMat.map = textures.wallTex;
+        if (textures.wallRoughnessTex) this.wallMat.roughnessMap = textures.wallRoughnessTex;
+        if (textures.wallBumpTex) this.wallMat.bumpMap = textures.wallBumpTex;
         this.wallMat.needsUpdate = true;
       }
       if (this.chairWoodMat && this.chairCushionMat) {
@@ -3793,6 +4591,10 @@
       window.removeEventListener('scroll', this.onScroll);
 
       this.disposeObject(this.scene);
+      if (this.pmremEnvTex) {
+        this.pmremEnvTex.dispose();
+        this.pmremEnvTex = null;
+      }
       this.renderer.dispose();
       if (dom.parentElement) {
         dom.parentElement.removeChild(dom);
