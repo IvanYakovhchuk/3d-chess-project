@@ -750,6 +750,13 @@
       this.highlightMeshes = [];
       this.checkPulseMesh = null;
 
+      // Tactical Arrows state (Chess.com style right-click arrows)
+      this.drawnArrows = new Map(); // key `${from}->${to}` -> mesh
+      this.arrowStartSquare = null;
+      this.isRightDraggingArrow = false;
+      this.previewArrowMesh = null;
+      this.lastPreviewToSquare = null;
+
       // Performance & Input-latency optimization state
       this.canvasRect = null;
       this.needsRaycast = false;
@@ -980,6 +987,11 @@
       // Master pieces container group
       this.piecesGroup = new THREE.Group();
       this.boardGroup.add(this.piecesGroup);
+
+      // Tactical Arrows container group (Chess.com style right-click arrows)
+      this.arrowsGroup = new THREE.Group();
+      this.arrowsGroup.position.y = 0.011;
+      this.boardGroup.add(this.arrowsGroup);
     }
 
     /**
@@ -1289,6 +1301,226 @@
     }
 
     /**
+     * Builds flat 2D geometry for tactical arrows (straight or Chess.com L-shaped)
+     */
+    createArrowGeometry(fromSquare, toSquare) {
+      const fromPos = squareToWorld(fromSquare);
+      const toPos = squareToWorld(toSquare);
+      const fromCoords = squareToCoords(fromSquare);
+      const toCoords = squareToCoords(toSquare);
+      if (!fromCoords || !toCoords) return null;
+
+      const dCol = toCoords.col - fromCoords.col;
+      const dRow = toCoords.row - fromCoords.row;
+      const isStraight = (dCol === 0 || dRow === 0 || Math.abs(dCol) === Math.abs(dRow));
+
+      const w = 0.18;
+      const w2 = w / 2;
+      const hw = 0.42;
+      const hw2 = hw / 2;
+      const hl = 0.36;
+
+      const positions = [];
+
+      function addTri(p1, p2, p3) {
+        positions.push(p1.x, 0, p1.z, p2.x, 0, p2.z, p3.x, 0, p3.z);
+      }
+
+      function addQuad(p1, p2, p3, p4) {
+        addTri(p1, p2, p3);
+        addTri(p1, p3, p4);
+      }
+
+      if (isStraight) {
+        const dx = toPos.x - fromPos.x;
+        const dz = toPos.z - fromPos.z;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.001) return null;
+
+        const ux = dx / len;
+        const uz = dz / len;
+        const nx = -uz;
+        const nz = ux;
+
+        const sx = fromPos.x + ux * 0.20;
+        const sz = fromPos.z + uz * 0.20;
+        const bx = toPos.x - ux * hl;
+        const bz = toPos.z - uz * hl;
+        const tx = toPos.x - ux * 0.05;
+        const tz = toPos.z - uz * 0.05;
+
+        const p1 = { x: sx - nx * w2, z: sz - nz * w2 };
+        const p2 = { x: sx + nx * w2, z: sz + nz * w2 };
+        const p3 = { x: bx + nx * w2, z: bz + nz * w2 };
+        const p4 = { x: bx - nx * w2, z: bz - nz * w2 };
+        addQuad(p1, p2, p3, p4);
+
+        const h1 = { x: bx - nx * hw2, z: bz - nz * hw2 };
+        const h2 = { x: bx + nx * hw2, z: bz + nz * hw2 };
+        const h3 = { x: tx, z: tz };
+        addTri(h1, h2, h3);
+      } else {
+        // L-shaped arrow ("стрілка буквою Г")
+        // Choose elbow along the longer leg first:
+        // if Math.abs(dRow) >= Math.abs(dCol), elbow is (x1, z2); else (x2, z1)
+        let bx, bz;
+        if (Math.abs(dRow) >= Math.abs(dCol)) {
+          bx = fromPos.x;
+          bz = toPos.z;
+        } else {
+          bx = toPos.x;
+          bz = fromPos.z;
+        }
+
+        // Segment 1: fromPos -> B
+        const d1x = bx - fromPos.x;
+        const d1z = bz - fromPos.z;
+        const len1 = Math.hypot(d1x, d1z);
+        if (len1 < 0.001) return null;
+        const u1x = d1x / len1;
+        const u1z = d1z / len1;
+        const n1x = -u1z;
+        const n1z = u1x;
+
+        // Segment 2: B -> toPos
+        const d2x = toPos.x - bx;
+        const d2z = toPos.z - bz;
+        const len2 = Math.hypot(d2x, d2z);
+        if (len2 < 0.001) return null;
+        const u2x = d2x / len2;
+        const u2z = d2z / len2;
+        const n2x = -u2z;
+        const n2z = u2x;
+
+        const s = n1x * u2x + n1z * u2z; // turn direction (+1 or -1)
+
+        // Shaft 1 start
+        const sx = fromPos.x + u1x * 0.20;
+        const sz = fromPos.z + u1z * 0.20;
+        const s1_left = { x: sx - n1x * w2, z: sz - n1z * w2 };
+        const s1_right = { x: sx + n1x * w2, z: sz + n1z * w2 };
+
+        // Elbow diagonal corners
+        const p_inner = {
+          x: bx + s * w2 * u2x - w2 * u1x,
+          z: bz + s * w2 * u2z - w2 * u1z
+        };
+        const p_outer = {
+          x: bx - s * w2 * u2x + w2 * u1x,
+          z: bz - s * w2 * u2z + w2 * u1z
+        };
+
+        if (s > 0) {
+          addQuad(s1_left, s1_right, p_inner, p_outer);
+        } else {
+          addQuad(s1_right, s1_left, p_inner, p_outer);
+        }
+
+        // Shaft 2 end (head base)
+        const kx = toPos.x - u2x * hl;
+        const kz = toPos.z - u2z * hl;
+        const k2_left = { x: kx - n2x * w2, z: kz - n2z * w2 };
+        const k2_right = { x: kx + n2x * w2, z: kz + n2z * w2 };
+
+        if (s > 0) {
+          addQuad(p_outer, p_inner, k2_left, k2_right);
+        } else {
+          addQuad(p_outer, p_inner, k2_right, k2_left);
+        }
+
+        // Arrowhead pointing along Segment 2 into toSquare
+        const h1 = { x: kx - n2x * hw2, z: kz - n2z * hw2 };
+        const h2 = { x: kx + n2x * hw2, z: kz + n2z * hw2 };
+        const tip = { x: toPos.x - u2x * 0.05, z: toPos.z - u2z * 0.05 };
+        addTri(h1, h2, tip);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    createArrowMesh(fromSquare, toSquare, isPreview = false) {
+      const geo = this.createArrowGeometry(fromSquare, toSquare);
+      if (!geo) return null;
+
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+        transparent: true,
+        opacity: isPreview ? 0.55 : 0.82,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData = { fromSquare, toSquare, isPreview };
+      return mesh;
+    }
+
+    drawArrow(fromSquare, toSquare) {
+      if (!fromSquare || !toSquare || fromSquare === toSquare) return null;
+      const key = `${fromSquare}->${toSquare}`;
+      if (this.drawnArrows.has(key)) return this.drawnArrows.get(key);
+
+      const mesh = this.createArrowMesh(fromSquare, toSquare, false);
+      if (!mesh) return null;
+
+      this.arrowsGroup.add(mesh);
+      this.drawnArrows.set(key, mesh);
+      this.requestRender(false);
+      return mesh;
+    }
+
+    removeArrow(fromSquare, toSquare) {
+      const key = `${fromSquare}->${toSquare}`;
+      const mesh = this.drawnArrows.get(key);
+      if (!mesh) return false;
+
+      this.arrowsGroup.remove(mesh);
+      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.material) mesh.material.dispose();
+      this.drawnArrows.delete(key);
+      this.requestRender(false);
+      return true;
+    }
+
+    toggleArrow(fromSquare, toSquare) {
+      if (!fromSquare || !toSquare || fromSquare === toSquare) return false;
+      const key = `${fromSquare}->${toSquare}`;
+      if (this.drawnArrows.has(key)) {
+        this.removeArrow(fromSquare, toSquare);
+        return false;
+      } else {
+        this.drawArrow(fromSquare, toSquare);
+        return true;
+      }
+    }
+
+    clearArrows() {
+      if (this.previewArrowMesh) {
+        this.arrowsGroup.remove(this.previewArrowMesh);
+        if (this.previewArrowMesh.geometry) this.previewArrowMesh.geometry.dispose();
+        if (this.previewArrowMesh.material) this.previewArrowMesh.material.dispose();
+        this.previewArrowMesh = null;
+        this.lastPreviewToSquare = null;
+      }
+
+      if (!this.drawnArrows || this.drawnArrows.size === 0) return;
+
+      for (const mesh of this.drawnArrows.values()) {
+        this.arrowsGroup.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) mesh.material.dispose();
+      }
+      this.drawnArrows.clear();
+      this.requestRender(false);
+    }
+
+    /**
      * Instantiates a piece mesh using window.ChessPieces3D or fallback
      */
     createPieceMesh(type, color) {
@@ -1329,6 +1561,9 @@
      */
     syncBoard(board, lastMove = null) {
       if (!Array.isArray(board)) return;
+
+      // Clear tactical arrows on any board move
+      this.clearArrows();
 
       // Extract move details if provided
       const fromSquare = lastMove ? (lastMove.from || null) : null;
@@ -1938,8 +2173,57 @@
       this.pointerDownPos = { x: event.clientX, y: event.clientY };
       this.updatePointerCoords(event);
 
-      // If right click or holding shift/ctrl -> orbit / pan mode
-      if (event.button === 2 || event.shiftKey || event.ctrlKey) {
+      // Left click clears any drawn arrows
+      if (event.button === 0 && this.drawnArrows && this.drawnArrows.size > 0) {
+        this.clearArrows();
+      }
+
+      // If right click: Chess.com style tactical arrow drawing (Desktop Mouse ONLY)
+      if (event.button === 2) {
+        const isMouse = (event.pointerType === 'mouse' || event.pointerType !== 'touch');
+        if (isMouse) {
+          this.raycaster.setFromCamera(this.pointer, this.camera);
+          let fromSquare = null;
+
+          // Check piece meshes first
+          const pieceIntersects = this.raycaster.intersectObjects(this.piecesGroup.children, true);
+          if (pieceIntersects.length > 0) {
+            let hitMesh = pieceIntersects[0].object;
+            while (hitMesh.parent && hitMesh.parent !== this.piecesGroup) {
+              hitMesh = hitMesh.parent;
+            }
+            for (const [sq, entry] of this.pieceMap.entries()) {
+              if (entry.mesh === hitMesh) {
+                fromSquare = sq;
+                break;
+              }
+            }
+          }
+
+          // If no piece clicked, check board plane
+          if (!fromSquare) {
+            const hitPoint = new THREE.Vector3();
+            if (this.raycaster.ray.intersectPlane(this.boardPlane, hitPoint)) {
+              if (hitPoint.x >= -4.0 && hitPoint.x <= 4.0 && hitPoint.z >= -4.0 && hitPoint.z <= 4.0) {
+                fromSquare = worldToSquare(hitPoint.x, hitPoint.z);
+              }
+            }
+          }
+
+          if (fromSquare) {
+            this.arrowStartSquare = fromSquare;
+            this.isRightDraggingArrow = true;
+          }
+        }
+
+        // Never lift or drag pieces on right-click
+        this.dragCandidate = null;
+        this.draggedPiece = null;
+        return;
+      }
+
+      // Ignore shift/ctrl key combinations
+      if (event.shiftKey || event.ctrlKey) {
         return;
       }
 
@@ -1992,6 +2276,42 @@
 
       this.updatePointerCoords(event);
 
+      // 0. Tactical Arrow Right-Drag Preview (Desktop Mouse ONLY)
+      if (this.isRightDraggingArrow && this.arrowStartSquare) {
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+        const hitPoint = new THREE.Vector3();
+        if (this.raycaster.ray.intersectPlane(this.boardPlane, hitPoint)) {
+          if (hitPoint.x >= -4.0 && hitPoint.x <= 4.0 && hitPoint.z >= -4.0 && hitPoint.z <= 4.0) {
+            const hovered = worldToSquare(hitPoint.x, hitPoint.z);
+            if (hovered && hovered !== this.arrowStartSquare) {
+              if (hovered !== this.lastPreviewToSquare) {
+                if (this.previewArrowMesh) {
+                  this.arrowsGroup.remove(this.previewArrowMesh);
+                  if (this.previewArrowMesh.geometry) this.previewArrowMesh.geometry.dispose();
+                  if (this.previewArrowMesh.material) this.previewArrowMesh.material.dispose();
+                  this.previewArrowMesh = null;
+                }
+                const previewMesh = this.createArrowMesh(this.arrowStartSquare, hovered, true);
+                if (previewMesh) {
+                  this.arrowsGroup.add(previewMesh);
+                  this.previewArrowMesh = previewMesh;
+                  this.lastPreviewToSquare = hovered;
+                  this.requestRender(false);
+                }
+              }
+            } else if (hovered === this.arrowStartSquare && this.previewArrowMesh) {
+              this.arrowsGroup.remove(this.previewArrowMesh);
+              if (this.previewArrowMesh.geometry) this.previewArrowMesh.geometry.dispose();
+              if (this.previewArrowMesh.material) this.previewArrowMesh.material.dispose();
+              this.previewArrowMesh = null;
+              this.lastPreviewToSquare = null;
+              this.requestRender(false);
+            }
+          }
+        }
+        return;
+      }
+
       // 1. Piece Dragging Mode
       if (this.dragCandidate && distance > 5 && !this.draggedPiece) {
         // Activate piece drag
@@ -2010,35 +2330,17 @@
         return;
       }
 
-      // 2. Camera Controls (Orbit / Pan)
-      if (this.isPointerDown) {
+      // 2. Camera Controls (Orbit - Left mouse drag only, no right-click / shift panning)
+      if (this.isPointerDown && this.pointerButton === 0 && !this.draggedPiece && !this.dragCandidate) {
         const lastX = this.pointerLastX ?? event.clientX;
         const lastY = this.pointerLastY ?? event.clientY;
         const moveX = event.clientX - lastX;
         const moveY = event.clientY - lastY;
 
         if (this.viewMode === '2d') {
-          // Lock polar angle in 2D mode, allow panning if right-drag or shift
+          // Lock polar angle in 2D mode
           this.targetSpherical.phi = 0.001;
           this.cameraSpherical.phi = 0.001;
-          if (this.pointerButton === 2 || event.shiftKey) {
-            const panSpeed = 0.012 * (this.cameraSpherical.radius / 11.0);
-            this.cameraTarget.x -= moveX * panSpeed;
-            this.cameraTarget.z -= moveY * panSpeed * (this.isFlipped ? -1 : 1);
-            this.requestRender(false);
-          }
-        } else if (this.pointerButton === 2 || event.shiftKey) {
-          // Pan camera target
-          const panSpeed = 0.012 * (this.cameraSpherical.radius / 12.0);
-          const right = new THREE.Vector3();
-          this.camera.getWorldDirection(right);
-          right.cross(this.camera.up).normalize();
-
-          const up = new THREE.Vector3(0, 1, 0);
-
-          this.cameraTarget.addScaledVector(right, -moveX * panSpeed);
-          this.cameraTarget.addScaledVector(up, moveY * panSpeed);
-          this.requestRender(false);
         } else {
           // Orbit camera angles
           const orbitSpeed = 0.007;
@@ -2065,6 +2367,42 @@
       const deltaX = event.clientX - this.pointerDownPos.x;
       const deltaY = event.clientY - this.pointerDownPos.y;
       const distance = Math.hypot(deltaX, deltaY);
+
+      // 0. Finished Right-Click Tactical Arrow (Desktop Mouse ONLY)
+      if (this.isRightDraggingArrow || event.button === 2) {
+        // Clear live preview arrow
+        if (this.previewArrowMesh) {
+          this.arrowsGroup.remove(this.previewArrowMesh);
+          if (this.previewArrowMesh.geometry) this.previewArrowMesh.geometry.dispose();
+          if (this.previewArrowMesh.material) this.previewArrowMesh.material.dispose();
+          this.previewArrowMesh = null;
+          this.lastPreviewToSquare = null;
+        }
+
+        // Determine destination square under pointer
+        this.updatePointerCoords(event);
+        this.raycaster.setFromCamera(this.pointer, this.camera);
+        const hitPoint = new THREE.Vector3();
+        let toSquare = null;
+        if (this.raycaster.ray.intersectPlane(this.boardPlane, hitPoint)) {
+          if (hitPoint.x >= -4.0 && hitPoint.x <= 4.0 && hitPoint.z >= -4.0 && hitPoint.z <= 4.0) {
+            toSquare = worldToSquare(hitPoint.x, hitPoint.z);
+          }
+        }
+
+        if (this.arrowStartSquare && toSquare && toSquare !== this.arrowStartSquare) {
+          this.toggleArrow(this.arrowStartSquare, toSquare);
+        } else if (this.arrowStartSquare && toSquare === this.arrowStartSquare) {
+          // Right-clicked in place: clears all drawn arrows
+          this.clearArrows();
+        }
+
+        this.isRightDraggingArrow = false;
+        this.arrowStartSquare = null;
+        this.isPointerDown = false;
+        this.requestRender(false);
+        return;
+      }
 
       // 1. Finished Piece Drag
       if (this.draggedPiece) {
@@ -2269,6 +2607,8 @@
      */
     destroy() {
       if (this.stopAnimationLoop) this.stopAnimationLoop();
+
+      this.clearArrows();
 
       if (this.resizeObserver) {
         this.resizeObserver.disconnect();
